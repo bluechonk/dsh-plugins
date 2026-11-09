@@ -5,10 +5,10 @@ DeepSeek Harness（DSH）插件市场。一份 `market-index.json` 加 `plugins/
 ## 索引地址
 
 ```
-https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/market-index.json
+https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 ```
 
-> DSH 的 `plugin-market` 服务对索引请求使用 `redirect: "error"`（源码实证），**拒绝任何重定向**。`raw.githubusercontent.com` 在国内不可达，`registry.npmmirror.com/.../files/...` 是 302 跳转，两者都会失败。上面这条 jsDelivr 直连地址可用。
+> DSH 的 `plugin-market` 服务对索引请求使用 `redirect: "error"`（源码实证），**拒绝任何重定向**。索引源必须指向 JSON 文件本身，填仓库首页（`github.com/bluechonk/dsh-plugins`）会拿到 HTML，报 `$.format must be 1`。
 
 ## 在 DSH 里添加
 

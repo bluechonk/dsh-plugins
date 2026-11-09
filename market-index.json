@@ -19,7 +19,7 @@
 				"en": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认开启，复用宿主 translator 服务）、启停开关、从外部 Agent 技能目录导入（软链或复制）、删除与打开目录。",
 				"zh": "**中文** | [English](README.en.md)"
 			},
-			"icon": "https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/plugins/dsh-skills-manager/icon.svg",
+			"icon": "https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/dsh-skills-manager/icon.svg",
 			"author": "bluechonk",
 			"homepage": "https://github.com/bluechonk/dsh-plugins/tree/main/plugins/dsh-skills-manager",
 			"repository": {
@@ -48,7 +48,7 @@
 				"en": "DeepSeek Harness 插件：侧边栏「使用统计」独立模块——六格摘要条 + Token 活动热力图（每日/每周/累计）+ 按模型每日趋势折线 + 模型用量环形图。数据全部来自本机会话日志，零上传零运行时依赖。",
 				"zh": "[中文](README.md) | [English](README_EN.md)"
 			},
-			"icon": "https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/plugins/dsh-usage-stats/icon.svg",
+			"icon": "https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/dsh-usage-stats/icon.svg",
 			"author": "bluechonk",
 			"homepage": "https://github.com/bluechonk/dsh-plugins/tree/main/plugins/dsh-usage-stats",
 			"repository": {

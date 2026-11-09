@@ -99,9 +99,8 @@ for (const name of ["dsh-skills-manager", "dsh-usage-stats"]) {
     name: pkg.name,
     title: { en: pkg.name.replace(/^@bluechonk\//, ""), zh: summary ? short(summary, 40) : pkg.name },
     description: { en: short(pkg.description ?? summary, 300), zh: summary },
-    // 图标走 jsDelivr 而非 raw.githubusercontent.com：后者在国内不可达，
-    // 图标会裂；索引本身也走 jsDelivr（宿主对索引请求是 redirect:"error"）。
-    icon: `https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/plugins/${name}/icon.svg`,
+    // 与索引地址同源走 GitHub raw，不引入 CDN
+    icon: `https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/${name}/icon.svg`,
     author: "bluechonk",
     homepage: `https://github.com/bluechonk/dsh-plugins/tree/main/plugins/${name}`,
     repository: { url: REPO_URL },
@@ -159,7 +158,7 @@ if (dirty) {
 if (SHOW_PUSH) {
   console.log(`
 索引地址（DSH 里粘贴这一条）：
-  https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/market-index.json
+  https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 
 提交并推送：
   git add market-index.json
