@@ -49,7 +49,13 @@ function readPlugin(dir) {
   }
 }
 
-/** 从 README 首段提取中文简介：取第一个非标题、非图片的段落 */
+/**
+ * 从 README 提取一句简介。
+ *
+ * 必须跳过「语言切换行」——README 开头常见 `**中文** | [English](README.en.md)`，
+ * 它不是简介，一旦被当成简介，DSH 发现页的标题就会显示这串 Markdown 原文（实测踩过）。
+ * 判据：剥掉 Markdown 链接与强调符号后，剩余纯文本少于 10 字符的行不算句子。
+ */
 function summaryFromReadme(dir, limit) {
   for (const name of ["README.md", "README.zh.md", "README_EN.md", "README.en.md"]) {
     const path = join(dir, name);
@@ -59,11 +65,22 @@ function summaryFromReadme(dir, limit) {
       const text = line.trim();
       if (!text || text.startsWith("#") || text.startsWith("![") || text.startsWith("<")) continue;
       if (text.startsWith("|") || text.startsWith("-")) continue;
+      const plain = text
+        .replace(/\[[^\]]*\]\([^)]*\)/g, "")
+        .replace(/[*_`#>|]/g, "")
+        .trim();
+      if (plain.length < 10) continue;
       return short(text, limit);
     }
   }
   return "";
 }
+
+/** 插件的展示名。DSH 发现页直接显示它，必须短，不能是 README 段落。 */
+const TITLES = {
+  "dsh-skills-manager": { en: "Skills Manager", zh: "技能管理器" },
+  "dsh-usage-stats": { en: "Usage Stats", zh: "使用统计" },
+};
 
 /**
  * 索引指向哪个 commit：**最后一次改动 plugins/ 的提交**，不是 HEAD。
@@ -95,10 +112,16 @@ for (const name of ["dsh-skills-manager", "dsh-usage-stats"]) {
     process.exit(1);
   }
   const summary = summaryFromReadme(dir, 200);
+  const title = TITLES[name] ?? { en: name, zh: name };
+  // 发布时间取该插件最后一次提交的时间：填 0 会让 DSH 显示 1970 年
+  const published = Number(git(["log", "-1", "--format=%ct", "--", `plugins/${name}`])) || 0;
+  // 描述用 package.json 的 description：README 段落里的 **强调** 与 [链接]() 在 DSH
+  // 发现页不渲染，会显示成原文
+  const description = short(pkg.description ?? summary ?? "", 300);
   entries.push({
     name: pkg.name,
-    title: { en: pkg.name.replace(/^@bluechonk\//, ""), zh: summary ? short(summary, 40) : pkg.name },
-    description: { en: short(pkg.description ?? summary, 300), zh: summary },
+    title,
+    description: { en: description, zh: description },
     // 与索引地址同源走 GitHub raw，不引入 CDN
     icon: `https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/${name}/icon.svg`,
     author: "bluechonk",
@@ -107,9 +130,7 @@ for (const name of ["dsh-skills-manager", "dsh-usage-stats"]) {
     versions: [
       {
         version: pkg.version,
-        // 固定用 0：索引本身不带时间语义，宿主只要求是 [0, 10^11) 的整数。
-        // 真实发布时间以 CHANGELOG 为准。
-        publishTimestamp: 0,
+        publishTimestamp: published,
         source: { type: "git", url: REPO_URL, commit, path: `plugins/${name}` },
       },
     ],
