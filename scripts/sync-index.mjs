@@ -1,19 +1,26 @@
 /**
- * 从 plugins/ 生成 market-index.json。
+ * 生成与校验 market-index.json。
  *
  * 干什么：DSH 的「插件 → 发现」读一份索引 JSON（format 1），索引里每个插件用
  *        `git + commit + path` 指向本仓库的子目录。手写这份 JSON 会在发版后立刻
  *        过期——commit 变了、版本变了，索引却还指着旧的。所以由脚本生成。
  *
- * 怎么跑：node scripts/sync-index.mjs            写盘
- *        node scripts/sync-index.mjs --check    只比对，不一致则非零退出
+ * 怎么跑：node scripts/sync-index.mjs            写盘（发版时用）
+ *        node scripts/sync-index.mjs --check    校验索引是否有效（CI 与 pre-push 用）
  *        node scripts/sync-index.mjs --push     生成后打印索引 URL 与提交命令
  * 依赖：无（只用 node 内置模块）。需要 git 在 PATH 上。
  *
+ * 为什么索引是「发布产物」而不是「每次改动都更新」：索引钉住一个 commit，而 squash
+ * 合并的提交本身既改 plugins/ 又改索引——索引要指向自己，自指无解。所以索引只在发版
+ * 时更新：日常改代码/文档的 PR 不碰索引，CI 不会因 squash 变红；bump 版本时才重新
+ * 生成（单独提交），漏更新会被 --check 挡住。
+ *
+ * 为什么 --check 要求钉住的 commit 是当前 HEAD 的祖先：安装时按该 commit 拉取，
+ * 只有祖先提交才稳定可达；squash 合并会把分支提交变成不可达对象，必须重新生成。
+ *
  * 为什么索引里的 commit 必须是 40 位小写 hex：宿主的校验器
  * （@deepseek-ai/dsh-plugin-market-index）对 source.commit 有正则校验，
- * 且安装时按该 commit 拉取。因此这里取「最后一次改动 plugins/ 的提交」，
- * 且拒绝在 plugins/ 有未提交改动时生成——否则索引指向一份不含当前代码的提交。
+ * 且安装时按该 commit 拉取。
  */
 
 import { execFileSync } from "node:child_process";
@@ -24,12 +31,23 @@ const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "
 const CHECK_ONLY = process.argv.includes("--check");
 const SHOW_PUSH = process.argv.includes("--push");
 const REPO_URL = "https://github.com/bluechonk/dsh-plugins.git";
+const PLUGIN_DIRS = ["dsh-skills-manager", "dsh-usage-stats"];
 
 function git(args, options = {}) {
   try {
     return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", ...options }).trim();
-  } catch (error) {
+  } catch {
     return null;
+  }
+}
+
+/** git 命令是否成功（只看退出码，不取输出）。 */
+function gitOk(args) {
+  try {
+    execFileSync("git", args, { cwd: ROOT, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -82,6 +100,97 @@ const TITLES = {
   "dsh-usage-stats": { en: "Usage Stats", zh: "使用统计" },
 };
 
+const pluginsDir = join(ROOT, "plugins");
+const outPath = join(ROOT, "market-index.json");
+
+/**
+ * 校验索引是否是有效的发布产物。
+ *
+ * 不比对「重新生成的文本」——索引允许滞后于未发版的改动。要校验的是三件事：
+ * 钉住的提交存在且是当前 HEAD 的祖先、索引声明的版本/描述与当前 package.json 一致、
+ * 钉住的提交本身确实带那个版本。
+ */
+function checkIndex() {
+  if (!existsSync(outPath)) {
+    console.error("✗ market-index.json 不存在");
+    return false;
+  }
+  let index;
+  try {
+    index = JSON.parse(readFileSync(outPath, "utf8"));
+  } catch {
+    console.error("✗ market-index.json 不是合法 JSON");
+    return false;
+  }
+  if (index.format !== 1) {
+    console.error("✗ 索引 format 不是 1");
+    return false;
+  }
+
+  const problems = [];
+  const entries = Array.isArray(index.plugins) ? index.plugins : [];
+  if (entries.length === 0) problems.push("索引里没有插件条目");
+
+  for (const entry of entries) {
+    const name = entry?.name ?? "(缺 name)";
+    const version = entry?.versions?.[0];
+    const pinned = version?.source?.commit;
+    const path = version?.source?.path;
+    if (typeof pinned !== "string" || !/^[0-9a-f]{40}$/.test(pinned)) {
+      problems.push(`${name}: source.commit 不是 40 位小写 hex`);
+      continue;
+    }
+    if (!gitOk(["cat-file", "-e", `${pinned}^{commit}`])) {
+      problems.push(`${name}: 钉住的提交 ${pinned.slice(0, 7)} 在本仓库不存在`);
+      continue;
+    }
+    if (!gitOk(["merge-base", "--is-ancestor", pinned, "HEAD"])) {
+      problems.push(`${name}: 钉住的提交 ${pinned.slice(0, 7)} 不是当前 HEAD 的祖先（squash 合并后需重新生成索引）`);
+      continue;
+    }
+    const dir = typeof path === "string" ? path.replace(/^plugins\//, "") : "";
+    const pkg = readPlugin(join(pluginsDir, dir));
+    if (!pkg) {
+      problems.push(`${name}: 索引指向的 plugins/${dir} 读不到 package.json`);
+      continue;
+    }
+    if (version.version !== pkg.version) {
+      problems.push(`${name}: 索引版本 ${version.version} 与 package.json ${pkg.version} 不一致（发版后需重新生成索引）`);
+    }
+    const description = short(pkg.description ?? "", 300);
+    if (entry.description?.en !== description || entry.description?.zh !== description) {
+      problems.push(`${name}: 索引描述与 package.json description 不一致`);
+    }
+    // 钉住的提交必须真的带这个版本，否则安装到的代码与索引声明不符
+    const atCommit = git(["show", `${pinned}:plugins/${dir}/package.json`]);
+    if (atCommit === null) {
+      problems.push(`${name}: 钉住的提交里没有 plugins/${dir}/package.json`);
+    } else {
+      try {
+        const pinnedPkg = JSON.parse(atCommit);
+        if (pinnedPkg.version !== version.version) {
+          problems.push(`${name}: 钉住的提交版本 ${pinnedPkg.version} 与索引声明 ${version.version} 不一致`);
+        }
+      } catch {
+        problems.push(`${name}: 钉住的提交里 plugins/${dir}/package.json 不是合法 JSON`);
+      }
+    }
+  }
+
+  const listed = new Set(entries.map(entry => entry?.name));
+  for (const dir of PLUGIN_DIRS) {
+    const pkg = readPlugin(join(pluginsDir, dir));
+    if (pkg && !listed.has(pkg.name)) problems.push(`插件 ${pkg.name} 未出现在索引里`);
+  }
+
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(`✗ ${problem}`);
+    console.error("发版后请跑 npm run index 重新生成索引；其他情况请修复上述不一致。");
+    return false;
+  }
+  return true;
+}
+
 /**
  * 索引指向哪个 commit：**最后一次改动 plugins/ 的提交**，不是 HEAD。
  *
@@ -94,7 +203,6 @@ function pluginsCommit() {
   return git(["log", "-1", "--format=%H", "--", "plugins/"]);
 }
 
-const pluginsDir = join(ROOT, "plugins");
 const commit = pluginsCommit();
 const dirty = git(["status", "--porcelain"]) !== "";
 
@@ -103,8 +211,14 @@ if (!commit) {
   process.exit(1);
 }
 
+if (CHECK_ONLY) {
+  if (!checkIndex()) process.exit(1);
+  console.log("✓ market-index.json 索引有效（钉住的提交存在且为 HEAD 祖先，版本与描述一致）");
+  process.exit(0);
+}
+
 const entries = [];
-for (const name of ["dsh-skills-manager", "dsh-usage-stats"]) {
+for (const name of PLUGIN_DIRS) {
   const dir = join(pluginsDir, name);
   const pkg = readPlugin(dir);
   if (!pkg) {
@@ -147,18 +261,7 @@ const index = {
   plugins: entries,
 };
 
-const outPath = join(ROOT, "market-index.json");
 const next = `${JSON.stringify(index, null, "\t")}\n`;
-const current = existsSync(outPath) ? readFileSync(outPath, "utf8") : null;
-
-if (CHECK_ONLY) {
-  if (current === next) {
-    console.log("✓ market-index.json 与 plugins/ 一致");
-    process.exit(0);
-  }
-  console.error("✗ market-index.json 与 plugins/ 不一致，请跑 npm run index");
-  process.exit(1);
-}
 
 // 索引指向的是「最后一次改动 plugins/ 的提交」。工作区若还有 plugins/ 的改动，
 // 那个 commit 里就没有这些改动，生成的索引会指向一份旧代码。

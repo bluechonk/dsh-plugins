@@ -45,12 +45,17 @@ git+https://github.com/bluechonk/dsh-plugins.git#<commit>&path:/plugins/<name>
 ```sh
 npm run check          # 各插件语法检查
 npm test               # 各插件单测
-npm run index          # 重新生成 market-index.json
-npm run index:check    # 只比对，不一致则非零退出
+npm run index          # 重新生成 market-index.json（发版时用）
+npm run index:check    # 校验索引有效：钉住的提交存在且为 HEAD 祖先、版本与描述一致
 npm run hooks:install  # 启用 .githooks（每个 clone 执行一次）
 ```
 
-**发版流程**：改完插件 → `npm test` → `npm run index` → 开分支提 PR（`market-index.json` 里的 commit 必须已推送，否则索引指向一个拉不到的提交）。CI 会跑 `index:check` 挡住漏更新的索引。
+**索引是发布产物，不是每次改动都更新**。索引钉住一个 commit，而 squash 合并的提交本身既改 `plugins/` 又改索引——索引要指向自己，自指无解。所以：
+
+- 日常改插件代码或文档：`npm test` → 开分支提 PR，**不碰 `market-index.json`**，CI 不会因 squash 变红。
+- 发版（bump `plugins/*/package.json` 的版本号）后：`npm run index` → 单独提交索引，把指针指向发布提交。漏更新会被 `index:check` 挡住（版本对不上）。
+
+`index:check` 校验三件事：钉住的 commit 存在、是当前 HEAD 的祖先、索引声明的版本与描述和当前 `package.json` 一致。
 
 ## 分支与合并
 
