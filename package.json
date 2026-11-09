@@ -1,0 +1,17 @@
+{
+  "name": "dsh-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeepSeek Harness 插件市场：一份 market-index.json 加 plugins/ 下的多个插件，一条索引 URL 装全部。",
+  "scripts": {
+    "check": "node scripts/check-all.mjs",
+    "test": "node scripts/test-all.mjs",
+    "index": "node scripts/sync-index.mjs",
+    "index:check": "node scripts/sync-index.mjs --check",
+    "hooks:install": "git config core.hooksPath .githooks"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

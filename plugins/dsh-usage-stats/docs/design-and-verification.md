@@ -1,0 +1,130 @@
+# 设计与验证记录
+
+本文记录 dsh-usage-stats 的设计依据、关键调研结论、实现要点与验证过程。
+
+## 一、目标与共识
+
+在 DSH 侧边栏新增「使用统计」独立模块（与「插件」「自动化任务」同级），呈现本机 Token 用量：
+
+- 六格摘要条（累计 / 峰值 / 缓存命中率 / 最长聊天时长 / 当前连续天数 / 最长连续天数）
+- GitHub 式 Token 活动热力图（每日 / 每周 / 累计三档；自然年 `1月`–`12月` 布局）
+- 按模型的趋势折线（近 7 日 / 近 30 日）
+- 模型用量环形图 + 模型列表（全部用量口径）
+
+界面按本机 ZCode「设置 → 使用统计」页对齐，配色取 ZCode 的 CSS 变量真值。
+
+插件标识：
+
+| 项 | 值 |
+|---|---|
+| npm 包名 | `@bluechonk/dsh-usage-stats` |
+| loader 行 id | `dsh-usage-stats` |
+| client 模块 id | `@bluechonk/dsh-usage-stats` |
+| 面板 id | `usage-stats`（侧边栏导航行与 `main` keyed slot 共用） |
+| 导航 order | 20（「插件」0、「自动化任务」10 之后） |
+
+## 二、关键调研结论（决定了架构）
+
+### 2.1 DSH 客户端插件运行时
+
+- `sidebar.panellist`（list）注册导航行 `{id, order, label}`，同一个 id 寻址 `main`（keyed）里的页面组件；宿主渲染图标、无障碍名称、选中态与收起提示，页面自持滚动与内边距，**需自画标题区**。
+- 客户端模块通过 `window.__ModuleLoader__.load({id, factory})` 注册，**id 必须与 `package.json` 的 `name` 逐字一致**——不一致时宿主报「loaded without registering … via __ModuleLoader__.load」并使插件整体加载失败。踩过一次：id 写成 `dsh-usage-stats` 而包名是 `@bluechonk/dsh-usage-stats`，现象是「插件列表里有、点开空白」。
+- 可用模块表只有 11 个（react / react-dom / zod / tanstack-virtual / dsh-client-store / dsh-client-ui-slots 等），**无图表库、无日期库、无 clsx、无图标库**——图表全部手写 SVG，图标用宿主素材或纯 CSS。
+- 主题载体是 `body[data-ds-dark-theme]`，CSS 变量 403 个 `--dsw-*`，只用 `--dsw-alias-*` 层；亮暗同名两档。
+
+完整调研见 [dsh-client-runtime-capabilities.md](dsh-client-runtime-capabilities.md)。
+
+### 2.2 会话日志与事件形状
+
+- 会话日志在 `~/.dsh/sessions/<workspace编码目录>/<sid>/session.v4.jsonl.zstd`，是**多帧 zstd**：`node:zlib` 的 `zstdDecompressSync` 只解首帧，必须走流式 `createZstdDecompress`。
+- `ctx.on("session/event", (session, event))` 推送事件；`assistant/message` 携带 `data.message.source.{provider, model}` 与 `data.usage`。
+- 官方 `@deepseek-ai/dsh-token-meter` 的 `tokenUsage` 投影是折叠语义基准：同键替换取差值、`llm/retry-started` 清槽后同键累加。
+
+### 2.3 ZCode 设计取材
+
+ZCode 是 Electron 应用（`%LOCALAPPDATA%\Programs\ZCode`），自带 `resources/app.asar` 与 CSS 变量表。取材方式有两条：
+
+1. **源码层**：解包 asar，从 `out/renderer/assets/styles-*.css` 取 `--color-usage-chart-1..6` 与 `--color-usage-heatmap-0..4` 的 oklch 真值；从 `AppUsageDailyModelTrendChart-*.js` 取趋势图 margin（`{top:8,right:24,left:24}`）与 X 刻度规则。
+2. **真机层**：CDP 连其调试端口，进「设置 → 使用统计」dump 计算样式与截图。
+
+对照结论与实测参数见 [README ](../README.md) 的「设计基准」一节。
+
+**ZCode 自身的缺陷**（本插件未沿袭）：其趋势图 Y 轴是线性的，单模型峰值 27.5 亿时，33.5 万的小模型高度只剩 0.12%，全部贴在基线上——图例列出 7 个模型却只看得到 1 条线。本插件改为**量级悬殊时自动切对数轴**。
+
+## 三、实现要点
+
+### 3.1 折叠（`lib/fold.js`）
+
+纯函数状态机，与官方 `tokenUsage` 投影同语义：同键替换产出差值（负桶合法，参与求和抵消）、`llm/retry-started` 清槽后同键累加、`usage: null` 视为缺省回落 stream 末块。
+
+**增量流求和恒等于官方 totals**——这是整份数据可信的基础，任何「修正负值」的改动都会破坏它。
+
+### 3.2 落盘纪律（`lib/store.js`）
+
+- 笔级增量流水是唯一真源；`daily` 只是可重建的缓存。
+- 原子写：同目录 tmp + rename。
+- **单写者锁**：`O_EXCL` 创建 + mtime 陈旧判定（≥5min）+ 归属校验（`assertOwnership`）+ `lock.claim` 独占凭据防 TOCTOU。
+- 归属校验按**锁文件指纹**（mtime+size）节流：锁被接管时指纹必然跳变、立即重校验，不存在「窗口内漏检易主」的窗口。
+
+### 3.3 日聚合（`lib/aggregate.js`）
+
+- 归轮按 `(sessionId, turn)` 全局去重，与模型无关（同一轮换模型续采不重复计轮）。
+- 归轮顺序：增量路径按**到达顺序**，重建路径也按**到达顺序**（不按 time 排序）——排序会让轮数归属的模型在重建前后漂移。
+- 负桶**不钳零**（负差值自然抵消是对账基础）；防御只做在展示层（`modelValueOf` 取 `max(0,·)`）。
+
+### 3.4 客户端（`lib/client.js`）
+
+- 注册位置：导航行走 `sidebar.panellist`（`id: usage-stats`、`order: 20`、label 跟随语言），页面走 `main` keyed slot（`key: usage-stats`）；两者同一 id，缺页面注册时宿主会拒绝切换。
+- 页面自持高度、滚动与内边距（内容限宽 960px 居中），标题用 `h1`；中心列本身不给内边距与滚动。
+- 三态渲染，单路失败只降级对应卡片并给行内重试。
+- 判废**按 key**：每路各自记最新 seq，落地时逐路比对；seq 登记必须在 `await` 之前且只许递增（否则慢响应会覆盖快响应的 seq，令过期数据被误判为最新而落地）。
+- 趋势图 Y 轴按量级自动切换线性 / 对数刻度。
+- 配色用 ZCode 的 oklch 真值，热力图用「蓝 × 空格子底」`color-mix` 混合。
+
+## 四、验证
+
+### 4.1 三层验证手段
+
+| 层 | 命令 | 覆盖 |
+|---|---|---|
+| 纯函数与契约 | `npm test` | 算术、布局、口径、接口形状、**真实组件函数执行** |
+| 端到端 | `npm run verify:e2e` | 真实会话文件回填 → 四条 API 响应形状 |
+| 真机 UI | `npm run verify:ui` | 真实渲染路径：组件渲染、配色、按钮、控制台错误 |
+
+### 4.2 变异测试
+
+用**变异测试**检验测试是否真的在测：注入 72 个变异（改坏 `lib/` 实现），逐个跑测试看是否变红。首轮结果 42 RED / **30 GREEN**——30 个变异未被抓住，暴露了三类假阳性：
+
+| 假阳性 | 说明 | 修法 |
+|---|---|---|
+| `react.createElement(Comp, props)` | 只构造元素对象、**从不执行组件函数体** | 渲染冒烟改为**直接调用** `Comp(props)` |
+| 恒真断言 | `typeof c === "object"`、两个由测试自己算出的数比较 | 换成真断言 |
+| 关键断言被 `if (existsSync(...))` 包住 | 条件不成立时整段变死代码 | 改为无条件断言 |
+
+修完后注入「引用未定义变量」的变异，渲染冒烟如期变红。
+
+### 4.3 实机核对
+
+- 深浅两主题逐项核对：摘要条六格、热力网格可见性、六色图例、环形图中心与摘要条口径一致、页脚唯一按钮、无控制台错误。
+- 趋势图按区间用量只画前 6 个模型：图例 6 项、折线 6 条。悬停卡片按**当天** `byModel` 列出「有量但没画线」的模型明细（前 3 条，空心圆点；其余折成计数）——某天用量全来自未画出的模型时，图上 6 条线全为 0，只给计数会让这一天变成没有任何行可解释的空卡。真机核对：11 月 4 日 39.7 万 tokens，卡片列出 `longcat-2.0` 31.8 万 + `spark-x` 7.9 万，与日总量对上。
+- 热力图按自然年铺满 `1月`–`12月`（列数 52~54，随年份变），左端恒 1 月、右端恒 12 月；未到的日子（今年今天之后，如 12 月）走空心虚线占位，与已过月份的实心色块一眼可分。每月/累计档按整列判未来：整列里还有未来日就整列虚线，逐格虚线会把柱子打碎。月标签按文字自然宽度绘制、末月右对齐向左生长，任何卡宽都不截断不越界。
+- 热力图锚点不落未来：每周/累计档的整列 tooltip 取列内最后一个「已到」的当年日，不再把本周六当成数据结束日；跨年尾列并入上一段月份标签，右端不会在当年图里顶出「1月」。
+- 模型用量右侧列表无悬停文本：行上没有原生 `title`，行内也不弹卡片，悬停卡片只保留在环形扇区上。
+- 面板注册在侧边栏：导航行与「插件」「自动化任务」同级，设置面板里不再有「使用统计」。
+- 插件面板：「插件 → 已安装」列表里 usage-stats 行显示 `icon.svg`（包根 manifest 的 `icon` 字段；缺字段时是默认占位图）。
+
+截图见 [images/](images/)（2026-11-06 重拍，1280×900 @2x）。
+
+## 五、代码评审记录
+
+三轮审核的完整结论见 [audit-report.md](audit-report.md)，要点：
+
+| 轮次 | 方法 | 修复 |
+|---|---|---|
+| 第一轮 | 双路并行审查 | 23 条：写锁语义 6、日聚合 4、健壮性 4、客户端 9 |
+| 第二轮 | 复核 + 口径一致性 | 3 条：全期口径封顶、归轮顺序、判废竞态 |
+| 第三轮 | 变异测试 + 边界复现 | 10 条：claim 回收、指纹节流、时间戳数值化、逐日隔离、对数轴等 |
+
+## 六、已知局限
+
+见 [SPEC.md §9](../SPEC.md)。

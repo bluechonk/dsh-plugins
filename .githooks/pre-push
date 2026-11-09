@@ -1,0 +1,39 @@
+#!/bin/sh
+# 推送门禁：禁止直推 main；其余分支跑与 CI 等价的检查。
+#
+# 为什么禁止直推 main：main 是索引与插件发布的唯一来源，直推会绕过 PR 评审、CI 状态
+# 与 squash-only 的线性历史约定。服务端另有分支保护兜底，本钩子是本地第一道闸，
+# 用来在发起网络请求前就给出明确提示。确需跳过检查用 --no-verify，但对 main 不适用。
+set -e
+
+repo="$(git rev-parse --show-toplevel)"
+cd "$repo"
+
+# 分支保护只针对 main 这一目标 ref：删除 main、强推 main 都算直推
+blocked=0
+while read -r local_ref local_sha remote_ref remote_sha || [ -n "$remote_ref" ]; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "[pre-push] 拒绝直推 main：$local_ref -> $remote_ref"
+    echo "[pre-push] 请新建分支推送并提交 PR，用 Squash Merge 合入。"
+    blocked=1
+  fi
+done
+
+if [ "$blocked" -ne 0 ]; then
+  exit 1
+fi
+
+if command -v wsl.exe >/dev/null 2>&1; then
+  echo "[pre-push] 在 WSL 中执行 npm run check && npm test && npm run index:check"
+  wsl.exe --cd "$repo" sh -lc 'npm run check && npm test && npm run index:check'
+  status=$?
+  if [ $status -ne 0 ]; then
+    echo "[pre-push] 测试未通过，已中止推送"
+  fi
+  exit $status
+fi
+
+echo "[pre-push] 未找到 wsl.exe，回退到本机执行"
+npm run check
+npm test
+npm run index:check

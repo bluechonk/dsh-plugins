@@ -1,0 +1,258 @@
+# dsh-usage-stats
+
+[中文](README.md) | English
+
+DeepSeek Harness plugin: adds a standalone **Usage Stats** module to the sidebar (alongside **Plugins** and **Automated Tasks**), showing local token usage through a **six-cell summary strip**, a **GitHub-style token activity heatmap**, a **per-model trend chart**, and a **model usage donut**. All data comes from local session logs — nothing is uploaded, and there are no runtime dependencies.
+
+A standalone sidebar module, sitting right after **Automated Tasks** and before **More**:
+
+![Usage stats panel](docs/images/01-usage-stats-panel.png)
+
+## Plugin identity
+
+| Item | Value |
+|---|---|
+| npm package name | `@bluechonk/dsh-usage-stats` |
+| loader row id | `dsh-usage-stats` |
+| client module id | `@bluechonk/dsh-usage-stats` (must match the package name character for character, otherwise the host refuses to load the whole plugin) |
+| panel id | `usage-stats` (shared by the sidebar row and the `main` keyed slot) |
+| navigation order | `order: 20` — after Plugins (0) and Automated Tasks (10), before More |
+| navigation title | Usage Stats |
+| icon | `icon.svg` (the `icon` field in the package-root `package.json`; row artwork in the Plugins → Installed list) |
+
+The loader row id and the client module id are **not** shared: the `id` in `cordis.patch.yml` is the stable identifier inside the host, while `name` is the npm package name. The client half's `__ModuleLoader__.load({id})` must match `package.json`'s `name` character for character — otherwise the host reports "loaded without registering … via __ModuleLoader__.load" and the plugin fails to load at all.
+
+## Interface
+
+| Area | Description |
+|---|---|
+| Title row | "Usage Stats" + an "App Usage" pill badge |
+| Six-cell summary strip | Total Tokens / Peak Tokens / Cache Hit Rate / Longest Chat / Current Streak / Longest Streak; when the width is too narrow the **whole cell wraps** instead of truncating the label |
+| Token activity | Heatmap cells covering January to December of the current year (52–54 calendar weeks, starting Sunday); pills in the top-right switch between Daily / Weekly / Total. Days that have not arrived yet are drawn as dashed outlines |
+| Time range | Pills switch between Last 7 Days / Last 30 Days, affecting **only the trend chart below** |
+| Daily token trend | Only the top 6 models by usage in the selected range get a coloured line, drawn with monotone cubic interpolation; the legend is display-only and matches the lines and tooltip rows |
+| Model usage | Donut chart on the left (total tokens in the centre) plus a per-model list on the right (name + share + token count); the list shows no hover text, and the hover card only appears on donut segments |
+| Footer | "Updated at HH:MM" + a refresh button |
+
+The model usage card (donut + model list + the merged "Other models" row):
+
+![Model usage donut](docs/images/02-model-usage-donut.png)
+
+Light theme (same layout, both themes verified):
+
+![Light theme](docs/images/03-light-theme.png)
+
+## Design baseline
+
+The interface takes its visual language (palette, cards, heatmap cells) from the local **ZCode** "Settings → Usage Stats" page, while the layout is a standalone sidebar panel. Measured parameters and the item-by-item comparison live in [docs/design-and-verification.md](docs/design-and-verification.md):
+
+| Element | Value |
+|---|---|
+| Title | 22px / 600 / letter-spacing -.01em (ZCode uses 30px / 600 / -.75px; the DSH centre column is narrower, so the scale is adjusted) |
+| Badge | Pill shaped, `padding 3px 12px`, `font-weight 500` (same shape as ZCode's `rounded-full px-3 py-1`) |
+| Summary strip | Numbers at 17px, labels at 13px, number above and label below |
+| Card | 12px radius, no border |
+| Heatmap cell | 3px rounded square, solid fill with no stroke |
+| Chart colours | Six-colour palette, see below |
+
+The palette is taken verbatim from ZCode's CSS variables (`--color-usage-chart-1..6` / `--color-usage-heatmap-0..4`, defined in oklch), with each theme forming its own set:
+
+| Purpose | Dark theme | Light theme |
+|---|---|---|
+| Chart colour 1 | sky-600 `oklch(58.8% .158 241.966)` | sky-500 `oklch(68.5% .169 237.323)` |
+| Chart colour 2 | teal-600 `oklch(60% .118 184.704)` | teal-400 `oklch(77.7% .152 181.912)` |
+| Chart colour 3 | violet-600 `oklch(54.1% .281 293.009)` | violet-400 `oklch(70.2% .183 293.541)` |
+| Chart colour 4 | rose-500 `oklch(64.5% .246 16.439)` | rose-400 `oklch(71.2% .194 13.428)` |
+| Chart colour 5 | indigo-500 `oklch(58.5% .233 277.117)` | indigo-400 `oklch(67.3% .182 276.935)` |
+| Chart colour 6 | cyan-600 `oklch(60.9% .126 221.723)` | cyan-400 `oklch(78.9% .154 211.53)` |
+
+The five heatmap levels mix a blue into the empty-cell background with `color-mix`, so they harmonise with any theme without hand-tuning the scale.
+
+## Data semantics
+
+The blocks use different scopes — do not mix them up:
+
+| Data | Scope | Affected by "Last 7 Days / Last 30 Days" |
+| --- | --- | --- |
+| Six-cell summary strip | All time | No |
+| Token activity heatmap | January 1 to December 31 of the current year (52–54 calendar weeks) | No |
+| Daily token trend | Last 7 days / Last 30 days | Yes |
+| Model usage donut | All time | No |
+
+Definitions per metric:
+
+| Metric | Definition |
+| --- | --- |
+| Total Tokens | Input + output + cache reads + cache writes, summed over all time |
+| Peak Tokens | The day with the largest sum of the four buckets |
+| Cache Hit Rate | Cache-read tokens ÷ (cache reads + uncached input); an em dash when there is no input |
+| Longest Chat | Longest single chat per (session, day); cross-day chats are cut at day boundaries |
+| Current / Longest Streak | A day counts when it has usage; if today has none, counting starts from yesterday |
+
+Every token figure on the page uses the short form (≥ 10,000 shows "12.3K", ≥ 100,000,000 shows "1.2B"); the exact value with thousands separators only appears in the element's `title` tooltip.
+
+## Data sources and collection
+
+The host pushes session events to the plugin, which **folds** them into per-record deltas before writing them to disk:
+
+| Source | Path | Description |
+|---|---|---|
+| Live events | `ctx.on("session/event", …)` | The host pushes `assistant/message` and friends, carrying `data.message.source` (provider / model) and `data.usage` |
+| Past sessions | `~/.dsh/sessions/<workspace>/<sid>/session.v4.jsonl.zstd` | Replayed in the background on load |
+| Source of truth | `~/.dsh/usage-stats/records-YYYY-MM.jsonl` | Per-record delta log, one file per month |
+| Daily aggregate cache | `~/.dsh/usage-stats/daily/YYYY-MM-DD.json` | Always rebuildable from the records; damaged or stale days self-heal |
+| Backfill cursor | `~/.dsh/usage-stats/backfill-marker.json` | Tracks folded sessions and mtime sentinels so the steady state costs zero decompression |
+
+The folding semantics match the official `@deepseek-ai/dsh-token-meter` `tokenUsage` projection: same-key samples produce a difference, `llm/retry-started` clears the slot so the next same-key sample accumulates, and the sum over the delta stream always equals the official totals. The backfill path replays whole session files to preserve slot baselines and only persists records with `seq` above the watermark.
+
+## Installation
+
+### Option 1: paste the GitHub link in the UI (recommended)
+
+Open DSH's **Plugins** page → **Add plugin** → "Install a third-party plugin" → paste the repository address:
+
+```
+https://github.com/bluechonk/dsh-usage-stats.git
+```
+
+The Host then does the rest on its own: it fetches the repository, installs it into the profile, registers the plugin as a bundle, and loads the bundle's loader declaration. **No configuration file needs editing.** When it finishes, choose **Enable now**.
+
+### Option 2: command line
+
+```bash
+dsh plugin --profile desktop add github:bluechonk/dsh-usage-stats
+```
+
+The `plugin` subcommand comes **after** `--profile` (the other order is read as web server arguments). The desktop profile is managed exclusively by the Electron application, so the command line cannot reach it — use option 1 there.
+
+### Option 3: local directory (for development)
+
+```bash
+# 1. Register into a profile (Windows: junction; macOS / Linux: ln -s)
+mkdir -p ~/.dsh/profiles/desktop/node_modules/@bluechonk
+ln -s <absolute path to this directory> ~/.dsh/profiles/desktop/node_modules/@bluechonk/dsh-usage-stats
+
+# 2. Add the package name to dsh.profile.bundles in the profile's package.json
+#    "@bluechonk/dsh-usage-stats"
+
+# 3. Restart that profile's DSH instance and refresh the page
+```
+
+While developing, editing `lib/client.js` takes effect on **refresh**; changes to the host half (`lib/index.js`) need a **DSH restart** (Electron exclusively manages the profile and cannot hot-reload it).
+
+## Configuration
+
+Three keys are accepted in the `config` section of `cordis.patch.yml` (unknown keys raise an error instead of being ignored):
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Set to `false` to disable the plugin (no collection, no writes) |
+| `storageRoot` | `~/.dsh/usage-stats` | Statistics directory (JSONL log + daily cache + lock + backfill cursor) |
+| `sessionsRoot` | `~/.dsh/sessions` | Session log directory (the source scanned during backfill) |
+
+```yaml
+- insert:
+    - id: dsh-usage-stats
+      name: "@bluechonk/dsh-usage-stats"
+      config:
+        storageRoot: "D:/dsh-stats"
+```
+
+## Data channel
+
+The host half registers same-origin routes on `ctx.webServer` (all guarded by a loopback and same-origin check):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/dsh-usage-stats/summary` | The six summary cells |
+| GET | `/api/dsh-usage-stats/heatmap?days=N` | Per-day token activity (default 366, upper bound 3660) |
+| GET | `/api/dsh-usage-stats/trend?days=N` | Per-model trend points (days=7 / 30, 0 = hourly) |
+| GET | `/api/dsh-usage-stats/models?days=N` | Model usage shares (default 0 = all time) |
+| GET | `/api/dsh-usage-stats/backfill/status` | Backfill progress (scanned / backfilled / records / error) |
+| POST | `/api/dsh-usage-stats/backfill` | Trigger a backfill manually (202 accepted, 409 when one is already running) |
+
+## Security and boundaries
+
+- **Writes are guarded by a single-writer lock with ownership verification**: once the lock is taken over, the previous writer stops writing immediately and degrades to a read-only mirror, so two instances can never wipe each other's ledger. The takeover claim file is reclaimed once it goes stale, so a leftover claim cannot block takeover forever.
+- **Session logs are only read**, never modified.
+- **Routes are loopback-guarded**: only local requests are accepted, and the Host header and Origin must be same-origin.
+- **Nothing is uploaded** — no telemetry, no third-party requests; all statistics land in `~/.dsh/usage-stats/`.
+- The plugin writes nothing to the host outside session logs; deleting `~/.dsh/usage-stats/` clears the statistics without touching sessions.
+
+## Resilience and degradation
+
+- Three states: loading / empty / failed (with an inline retry).
+- A failing route only degrades its own card instead of taking down the panel; **even when old data is present it says "stale, showing the last values" and offers an inline retry**.
+- Every refresh records "Updated at HH:MM"; when a route fails the timestamp freezes and is marked "(some data not updated)"; a failing first load still produces a visible signal.
+- The panel is wrapped in an error boundary: a render failure degrades to a fallback banner instead of blanking the centre column.
+- A silent poll runs every 60 seconds without flashing "Loading"; background tabs skip a beat, coming back to the foreground catches up, closing the page stops it.
+- Backfill progress is visible the whole time (including in the ready state), and finishing triggers one full refresh.
+
+## Repository layout
+
+```
+dsh-usage-stats/
+├─ package.json          # dsh.bundle.patch + dsh.client
+├─ cordis.patch.yml      # loader insertion row (id / name)
+├─ lib/index.js          # host half: event collection, backfill, routes, lock
+├─ lib/fold.js           # folding state machine (replace / clear / sample, pure)
+├─ lib/store.js          # write discipline, atomic writes, single-writer lock
+├─ lib/aggregate.js      # aggregation semantics (streak / peak / hit rate / share)
+├─ lib/client.js         # client half: sidebar navigation row, main panel, and every chart
+├─ scripts/              # verify-dsh-web.mjs (dsh web verification instance), e2e-verify.mjs, smoke-ui.mjs
+├─ docs/                 # design-and-verification.md, audit-report.md, dsh-client-runtime-capabilities.md, images/
+├─ test/                 # node:test unit and end-to-end tests
+└─ SPEC.md               # full technical specification
+```
+
+## Development
+
+```bash
+npm run check        # syntax check
+npm test             # unit tests (148 cases)
+npm run verify:e2e   # end to end: runs a backfill over the local session logs and checks the shape of all four API responses
+npm run verify:ui    # real-machine UI smoke test: drives a real browser into the sidebar's Usage Stats panel and asserts it renders without console errors
+```
+
+No runtime dependencies; tests use Node's built-in `node:test`. `verify:e2e` only reads `~/.dsh/sessions` and writes its statistics to a temporary directory that it cleans up afterwards, leaving `~/.dsh/usage-stats/` untouched.
+
+See [docs/design-and-verification.md](docs/design-and-verification.md) for the design and verification details (design baseline, audit and fix log), [SPEC.md](SPEC.md) for the complete interface contract, and [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Known limitations
+
+- The heatmap spans the current calendar year from January to December, so only this year's usage is shown; days that have not arrived yet (for example December while it is still November) are drawn as dashed placeholders to distinguish them from the solid cells of elapsed months. Usage from earlier years only counts towards the all-time figures such as the summary strip.
+- Longest chat time is bucketed per (session, day) and takes the extreme, so cross-day chats are cut at day boundaries — an approximation.
+- The trend chart draws only the top 6 models by usage in the selected range (legend, lines and tooltip rows stay in sync); the tooltip notes "N more models not listed" — N counts the models with usage on **that day** that are not drawn — and its daily total still includes every model.
+- The cache hit rate only covers cache reads and uncached input, excluding output and reasoning.
+- Sessions that were already running when the plugin was installed are not backfilled for their earlier usage (better to miss than to double count).
+- A sequence gap left by a failed write is skipped by the derived watermark, so that delta is not re-collected (only reachable when several consecutive events fail to write).
+- The full list lives in [SPEC.md §9](SPEC.md).
+
+## Repository
+
+- GitHub: <https://github.com/bluechonk/dsh-usage-stats>
+- Plugin identity: npm package name `@bluechonk/dsh-usage-stats`, loader row id `dsh-usage-stats`.
+
+## Versioning
+
+**A self-use plugin, iterating on `0.1.x`**: the interfaces and data shapes are not settled yet, so no compatibility promise is made; `0.2.0` is reserved for an incompatible interface revision. It is **not published to npm** — installation goes through the GitHub link only (`package.json` is marked `private: true`).
+
+See [CHANGELOG.md](CHANGELOG.md) for the version history.
+
+## Localization
+
+The panel copy **follows the host language automatically** (DSH Settings → General → Language); no page reload is needed.
+
+- It uses the host's `@deepseek-ai/dsh-client-locale`: the plugin registers a `dsh-usage-stats` namespace with Chinese and English dictionaries, and the host injects the translate function into the panel. Switching language re-renders the panel.
+- Numbers and dates are localized too: Chinese uses 万/亿, 天/小时/分, 月/日; English uses K/B, d/h/min, MM/DD.
+- When the host provides no locale service the panel falls back to Chinese and logs a warning rather than failing silently.
+- 中文说明见 [README.md](README.md)。
+
+## Credits and licence
+
+- The interface follows the "Usage Stats" panel of [zai-org/ZCode](https://github.com/zai-org/ZCode) (Apache-2.0); the palette is taken from its CSS variables.
+- Collection and folding semantics follow the official `@deepseek-ai/dsh-token-meter` `tokenUsage` projection.
+- The dashboard implementation is based on [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats) (MIT).
+- The early version came from [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats) (MIT); this repository rebuilds the dashboard on top of it.
+
+MIT License, see [LICENSE](LICENSE).

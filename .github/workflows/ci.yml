@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [ 22.x, 24.x ]
+    steps:
+      # 索引校验依赖 git log -- plugins/ 找「最后一次改动 plugins/ 的提交」，
+      # 浅克隆只会看到 HEAD，会把索引误判为不一致（main 上连续失败的原因）
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      # 插件都是零运行时依赖，无需 npm install
+      - name: 语法检查
+        run: npm run check
+      - name: 单元测试
+        run: npm test
+      # 索引必须与 plugins/ 一致，否则发出去的索引指向旧 commit
+      - name: 索引一致性
+        run: npm run index:check
