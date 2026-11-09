@@ -12,8 +12,8 @@
  *
  * 为什么索引里的 commit 必须是 40 位小写 hex：宿主的校验器
  * （@deepseek-ai/dsh-plugin-market-index）对 source.commit 有正则校验，
- * 且安装时按该 commit 拉取。因此这里的 commit 取「已提交的 HEAD」，
- * 工作区有未提交改动时给出警告——否则发布的索引指向一个推不上去的状态。
+ * 且安装时按该 commit 拉取。因此这里取「最后一次改动 plugins/ 的提交」，
+ * 且拒绝在 plugins/ 有未提交改动时生成——否则索引指向一份不含当前代码的提交。
  */
 
 import { execFileSync } from "node:child_process";
@@ -65,12 +65,24 @@ function summaryFromReadme(dir, limit) {
   return "";
 }
 
+/**
+ * 索引指向哪个 commit：**最后一次改动 plugins/ 的提交**，不是 HEAD。
+ *
+ * 为什么：索引文件本身也在仓库里，若指向 HEAD，那么提交索引这个动作会让 HEAD 前进、
+ * 索引当场过期，形成自引用悖论——每次改插件都要先提交索引、再改索引、再提交，
+ * 永远追不上。而提交索引不碰 plugins/，所以「最后一次改动 plugins/ 的提交」在
+ * 提交索引前后保持不变，指针稳定。
+ */
+function pluginsCommit() {
+  return git(["log", "-1", "--format=%H", "--", "plugins/"]);
+}
+
 const pluginsDir = join(ROOT, "plugins");
-const commit = git(["rev-parse", "HEAD"]);
+const commit = pluginsCommit();
 const dirty = git(["status", "--porcelain"]) !== "";
 
 if (!commit) {
-  console.error("✗ 取不到 git HEAD——本脚本必须在 git 仓库里跑");
+  console.error("✗ 取不到 plugins/ 的提交——本脚本必须在 git 仓库里跑");
   process.exit(1);
 }
 
@@ -87,7 +99,9 @@ for (const name of ["dsh-skills-manager", "dsh-usage-stats"]) {
     name: pkg.name,
     title: { en: pkg.name.replace(/^@bluechonk\//, ""), zh: summary ? short(summary, 40) : pkg.name },
     description: { en: short(pkg.description ?? summary, 300), zh: summary },
-    icon: `https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/${name}/icon.svg`,
+    // 图标走 jsDelivr 而非 raw.githubusercontent.com：后者在国内不可达，
+    // 图标会裂；索引本身也走 jsDelivr（宿主对索引请求是 redirect:"error"）。
+    icon: `https://gcore.jsdelivr.net/gh/bluechonk/dsh-plugins@main/plugins/${name}/icon.svg`,
     author: "bluechonk",
     homepage: `https://github.com/bluechonk/dsh-plugins/tree/main/plugins/${name}`,
     repository: { url: REPO_URL },
@@ -126,12 +140,20 @@ if (CHECK_ONLY) {
   process.exit(1);
 }
 
+// 索引指向的是「最后一次改动 plugins/ 的提交」。工作区若还有 plugins/ 的改动，
+// 那个 commit 里就没有这些改动，生成的索引会指向一份旧代码。
+const dirtyPlugins = git(["status", "--porcelain", "--", "plugins/"]) !== "";
+if (dirtyPlugins) {
+  console.error("✗ plugins/ 有未提交改动。索引必须指向已提交的代码，请先提交 plugins/ 的改动再生成索引。");
+  process.exit(1);
+}
+
 writeFileSync(outPath, next, "utf8");
 console.log(`已生成 market-index.json（${entries.length} 个插件）`);
-console.log(`commit: ${commit}`);
+console.log(`指向 commit: ${commit}`);
 
 if (dirty) {
-  console.log("\n⚠ 工作区有未提交改动。索引指向已提交的 HEAD，未提交的改动不会进入索引。");
+  console.log("\n⚠ 工作区还有其他未提交改动（不影响索引，但提交索引时请一并处理）。");
 }
 
 if (SHOW_PUSH) {
