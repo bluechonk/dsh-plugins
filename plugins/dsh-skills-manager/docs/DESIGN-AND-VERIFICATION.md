@@ -1,0 +1,391 @@
+# 设计与验证记录
+
+## 一、目标与标识
+
+在 DSH **侧边栏**新增「技能」独立面板（与「插件」「自动化任务」「使用统计」同级），展示并管理当前实际加载的 skill：
+
+- 全局 `~/.dsh/skills`（`user-dsh`，rank 400）
+- 全局 `~/.agents/skills`（`user-agents`，rank 500）
+- 项目/工作区 `<projectRoot>/.dsh/skills`、`<projectRoot>/.agents/skills`（rank 100 / 200）
+
+界面按参考图实现：标题、作用域下拉、技能计数、搜索框、「已安装 N」分组、更多菜单（导入）、刷新、新建、行内开关与删除、详情弹窗（描述/范围/状态/文件路径）、导入外部 Agent 技能弹窗（全局/项目、软链/直接复制）。
+
+插件标识（包名、loader 行 id、client 模块 id 三者统一带 `@bluechonk` scope）：
+
+| 项 | 值 |
+|---|---|
+| npm 包名 | `@bluechonk/dsh-skills-manager` |
+| loader 行 id | `@bluechonk/dsh-skills-manager` |
+| client 模块 id | `@bluechonk/dsh-skills-manager` |
+| 侧边栏条目 id | `skills-manager`（同时是 `main` keyed 槽位的主面板键） |
+| 导航 order | 30（在「插件」0 /「自动化任务」10 /「使用统计」20 之后） |
+
+## 二、关键调研结论（决定了架构）
+
+1. **入口位置（0.1.4 起）**：侧边栏导航行注册在 `sidebar.panellist`（注册项 `{id, order, label}`），页面注册在 `main` keyed slot（`key` 与导航行 id 相同，宿主按条目 id 派发）。本插件取 **order 30**，排在「插件」(0) /「自动化任务」(10) /「使用统计」(20) 之后。此前（0.1.0–0.1.3）曾用 `settings.section` order 11（「模型」下方），已被本次迁移取代。
+2. **技能注册表**：`ctx.skills` 提供 `list({cwd, scope})` / `snapshot()` / `get(name)`；摘要含 `name/description/whenToUse/path/source/provider/invocation/resourceBase`。
+3. **作用域陷阱**：桌面端 bundle（`dsh-web-app/cordis.patch.yml`）在宿主面**禁用**了 `skill-filesystem`，文件系统技能注册在各 agent preset 的层里。因此宿主必须带着「查看者作用域」读取，否则只看得到宿主全局层。实现采用：活跃 agent 作用域 + 各 preset 作用域（`agentPresets.acquireScope`）并集，再与本地根扫描合并。
+4. **会话 Remote 不可用**：`ctx.remote.skills.list` 需要 sessionId，设置页没有会话，故改为宿主自建同源路由（形态参考同机已装的 `dsh-usage-stats` 与社区 `dsh-skill-panel`）。
+5. **客户端形态**：`window.__ModuleLoader__.load({id: 包名, factory})` + `require("react")` + `ctx.slots.inject("sidebar.panellist" / "main", …)`，`inject = ["slots", "locale"]`。`main` 槽位不给页头、内边距与滚动，面板必须自持页骨架。
+6. **主题**：只用 `--dsw-alias-*` 令牌，深浅色自动跟随官方主题；类名统一 `dsm-*` 前缀。
+
+## 三、实现要点
+
+### 3.1 宿主半（lib/index.js）
+
+- 根解析优先级与官方提供方一致：项目根（100/200）→ 自定义（300）→ 用户 DSH（400）→ 用户 Agents（500）→ 内置（600）。
+- 项目根 = 含 `.git` 的最近祖先，否则取 cwd。
+- 目录扫描只认一层：`<root>/<name>/SKILL.md` 与 `<root>/<name>.md`；跳过 `.` 开头目录（`.system` 等）。
+- 注册表与本地扫描合并时，**本地刚解析的 frontmatter 是磁盘真值**：注册表目录带缓存（watcher 失效前是旧值），若用旧值覆盖，刚点下的「禁用」会在界面上回弹。此处是实测发现并修复的缺陷。
+- 写操作目标一律由宿主反查，客户端只能传技能名。
+
+### 3.2 客户端半（client/client.js）
+
+- 主面板：`sidebar.panellist`（order 30）导航行 + `main` keyed 页面（`.dsm-page` 自持滚动与内边距，896px 内容列居中）。
+- 作用域下拉：用户级 + 工作区分组（工作区清单来自宿主 `workspaceRegistry`）。
+- 详情弹窗严格对齐参考图，四段结构：
+  1. **描述** —— 只渲染 frontmatter 的 `description`，按 **Markdown** 渲染（内置零依赖子集：标题、段落、列表、引用、代码块、行内代码、粗体/斜体/删除线、链接），独立滚动区（`max-height:210px`，原生滚动条），不显示原始 frontmatter；
+  2. **范围** —— 个人 / 项目名 / 内置（项目技能取项目根末段目录名）；
+  3. **状态** —— 已启用 / 已禁用（按 `modelInvocable`）；
+  4. **文件路径** —— 行内等宽路径 + 复制图标，无边框卡片。
+  不再出现「正文」「文件清单」等参考图之外的分段。
+- 导入弹窗：外部目录发现、全选与已选计数、软链/直接复制、导入到全局/项目。
+- 组件异常由 `ErrorBoundary` 兜底，避免拖塌整个面板。
+
+## 四、验证记录
+
+### 4.1 静态与单元测试
+
+```
+node --check lib/index.js lib/roots.js lib/frontmatter.js client/client.js   → 通过
+node --test "test/**/*.test.mjs"                                             → 21 passed / 0 failed
+```
+
+覆盖：frontmatter 解析（标量、引号、折叠块）、`disable-model-invocation` 增删幂等性、调用策略派生、项目根探测、根标签与 rank、目录扫描规则、禁用标记识别、文件统计、外部目录扫描。
+
+### 4.2 安装与注册
+
+- `plugin_manager install_bundle` → `application: applied`，无警告。
+- loader 行 id 改为 `@bluechonk/dsh-skills-manager` 后，先 `remove_bundle` 清掉旧行（id `dsh-skills-manager`）再重新 `install_bundle`，避免同一包名出现两行；插件管理器里的条目为 `include:@bluechonk/dsh-skills-manager`，`moduleName` 与 `patchId` 同为 `@bluechonk/dsh-skills-manager`，状态 `enabled: true / active`。
+- profile 的 `package.json` 里 `dsh.profile.bundles` 已含 `@bluechonk/dsh-skills-manager`。
+- 宿主路由：`GET /dsh-skills-manager/state` 返回 36 条技能（24 条 `user-agents` + 4 条 preset `custom` + 8 条 `bundled`），根清单与工作区清单齐备。
+- 客户端 slot：`sidebar.panellist` 注册 `id=skills-manager`、`order=30`（在 `usage-stats(20)` 之后），`main` 以同一 key 注册页面；桌面端实机点击后主面板正常渲染（见 4.3 与第七章）。
+
+### 4.3 界面实机验证
+
+在独立验证实例（`dsh --profile web --port 39181`）上用 agent-browser 实测并截图（`01` 与 `10` 摄于 0.1.4 的
+桌面端实机，面板主体与其余截图一致）：
+
+| 截图 | 验证点 |
+|---|---|
+| `01-sidebar-skills-panel.png` | 「技能」位于「使用统计」与「更多」之间，选中态高亮；点开后主面板显示标题、作用域下拉、「技能 N」、搜索与「已安装 N」列表 |
+| `10-skills-main-panel.png` | 0.1.4 桌面端实拍：点开「技能」后的完整主面板（标题、作用域下拉、「技能 N」、搜索、「已安装 N」列表与行内开关/删除） |
+| `02-skill-detail-dialog.png` | 四段结构：描述（仅描述正文，Markdown 渲染，独立滚动）、范围（个人）、状态（已启用）、文件路径（行内等宽路径 + 复制图标）；无「正文」「文件清单」 |
+| `03-more-menu.png` | 更多菜单弹出「导入」 |
+| `04-import-external-agent-skills.png` | 全局/项目切换、刷新、全选与已选计数、外部目录清单、软链/直接复制、导入到全局 |
+| `05-scope-dropdown.png` | 「用户 · 本机 ✓」+ 「工作区」分组（resume-site / modelmux / default-workspace） |
+
+### 4.4 写操作端到端自检
+
+用临时技能 `dsm-self-test` 跑完整链路（跑完已删除，`~/.dsh/skills` 恢复为空）：
+
+| 步骤 | 结果 |
+|---|---|
+| 新建 | ok=true，落盘 `~/.dsh/skills/dsm-self-test/SKILL.md`，列表立即出现（source=user-dsh） |
+| 禁用 | frontmatter 写入 `disable-model-invocation: true`，列表 `modelInvocable=false` |
+| 启用 | 该行被移除，`modelInvocable=true` |
+| 删除 | 列表不再出现，目录被清除 |
+
+### 4.5 已知边界
+
+- 依赖包目录（`node_modules` 内）的 preset 内置技能只读：拒绝改写与删除，避免破坏官方包。
+- 软链在 Windows 上使用 junction（免管理员权限）；若目标目录被外部删除，链接会失效，需要重新导入。
+- 导入/删除/启停都会改动用户磁盘上的技能文件（开关写的是跨工具通用的 `disable-model-invocation` 键），界面上已注明，删除有二次确认。
+
+## 五、代码评审与修复（2026-10-20）
+
+对宿主半与客户端半各做了一轮独立只读评审，逐条复核后修复如下（每条都补了回归测试）。
+
+### 5.1 宿主半
+
+| 级别 | 问题 | 修复 |
+|---|---|---|
+| P0 | 删除根目录下平铺的 `skill.md` 会连整个技能根一起删掉（`isBundle` 靠文件名猜） | `isBundle` 改由「该项是否为目录」判定；删除前再校验目标目录不等于受管根；删除改为先改名再删 |
+| P0 | 非 UTF-8（GBK）的 SKILL.md 开关一次即被永久改写成乱码 | 按 Buffer 读取并做无损校验，不能无损解码就 400 拒绝改写，字节不动 |
+| P1 | 跨根同名技能按数组顺序遮蔽，与 rank 优先级相反（面板停用的不是 DSH 实际加载的那份） | 扫描前按 rank 升序排序，与注册表裁决一致 |
+| P1 | 字面量块里的 `---` 被误判成 frontmatter 结束，开关静默失效且写坏 YAML | 结束标记必须是行首 `---`（不接受前导空白） |
+| P1 | 外部平铺 `.md` 导入时把整个外部根装进来 | 扫描结果直接给出技能目录与 `isFlat`，导入按平铺文件单独处理 |
+| P1 | 客户端 `cwd` 决定新建/导入落点，可往任意绝对路径写文件 | 项目落点只认已登记工作区；`cwd` 也只接受已登记工作区路径 |
+| P1 | preset 内置目录被降级成 `custom` 而可写 | 「官方包」判定改用真实路径匹配 `node_modules`，不靠字符串子串 |
+| P2 | 每请求全量重扫；`walk` 的字节上限从未生效 | 技能清单加 1 秒 TTL 缓存（写操作后失效）；`walk` 真正执行字节上限并回传 `truncated` |
+| P2 | `payload=null` 报 500；超大请求体 500 且连接被 destroy | 统一 400（`BadRequestError`）/413（`BodyTooLargeError`）；405 带 `Allow` 头 |
+| P2 | 符号链接可绕过根边界 | 写入前用 `realpath` 二次校验真实路径；删除前再 `lstat` 确认非链接 |
+| P2 | BOM/CRLF 被整体归一化，混合换行被统一 | 保留 BOM，按出现次数取主导换行风格 |
+| P2 | preset 作用域缓存永不失效、日志无限增长、错误回显绝对路径 | 按 preset 列表签名重建缓存；日志按 1MB 轮转；5xx 统一 `internal error` |
+
+### 5.2 客户端半
+
+| 级别 | 问题 | 修复 |
+|---|---|---|
+| P0 | 编辑残留导致 `client.js` 语法错误，整个 client 模块加载失败、分区整块消失 | 删掉残留行，并把 `node --check` 纳入 `npm run check` |
+| P0 | 导入弹窗「目标」标签与实际落盘位置不一致 | 只有作用域是工作区时才提供「项目」目标，按钮文案随之变化 |
+| P0 | 导入忽略宿主的 `installed` 标记，且首个失败即中断整批 | 跳过已安装项；逐条导入并汇总失败项 |
+| P0 | `WRITABLE_SOURCES` 漏了 `custom`，自定义目录的技能被误判只读 | 可写根改由宿主 `root.kind` 推导，客户端不再另写白名单 |
+| P0 | 作用域切换竞态：写操作完成后的刷新用旧闭包，把面板钉回旧作用域 | 写后刷新走 `loadRef.current()`（最新加载器） |
+| P1 | 导入弹窗底部「软链/直接复制」下拉被 `overflow:hidden` 裁掉 | 增加向上展开的菜单变体 |
+| P1 | 来源行复选框是死的；选择集按名字去重导致同名串选、「全选」不可逆 | 复选框真正可用；选择键改为「来源::名字」 |
+| P1 | 弹窗无焦点管理、Escape 会连设置面板一起关 | 打开时聚焦弹窗、关闭时归还焦点、Escape 隔离 |
+| P1 | 刷新失败被静默吞掉 | 有旧数据时也显示刷新失败提示 |
+| P1 | 删除用阻塞式 `window.confirm` | 改为自绘确认框（列出路径与不可撤销提示） |
+| P1 | 硬编码 `rgba()` 颜色违反 `--dsw-alias-*` 约束 | 遮罩与阴影改用 `color-mix()` + 主题令牌 |
+| P2 | 技能行/来源行键盘不可达 | 加 `role="button"`、`tabIndex` 与 Enter/Space 处理；控件 `aria-label` 带技能名 |
+| P2 | 请求无超时，宿主卡住时永远「加载中」 | 统一 10 秒 AbortController 超时 |
+
+### 5.3 评审后的验证
+
+- 单测从 21 项增加到 **52 项**（新增 HTTP 层 10 项、客户端纯函数 8 项、回归用例若干），全绿。
+- CI（Node 22 / 24，ubuntu）绿；Linux 上暴露的 `normalizeCwd` 平台差异断言已修正。
+- 实机复验：删除确认框、导入弹窗、作用域下拉、详情弹窗均正常。
+
+## 六、ZCode 设计对齐（2026-10-20）
+
+用 agent-browser 连上本机 ZCode（Electron，`--remote-debugging-port=9222` + `agent-browser --cdp 9222`），
+进入「设置 → 技能」页，**实测取样**了 ZCode 的设计参数，再据此改写本插件的样式。
+
+> 取材截图（设计参考）：[docs/reference/](reference/)
+> —— `zcode-*.png` 是 ZCode 的实拍（对齐基准），`desktop-*.png` 是本插件在 DSH 桌面端的实拍。
+
+### 6.1 ZCode 实测参数
+
+| 元素 | ZCode 实测 | 本插件实现 |
+|---|---|---|
+| 页面根背景 | 深色 `rgb(22,22,22)` / 浅色 `rgb(236,236,238)` | 交给宿主主题，我们只画自己的层级 |
+| 标题 | 30px / 600 / letter-spacing -0.75px / line-height 36px | 同值 |
+| 内容列 | `max-w-4xl`(896px) 居中，横向内距 32px，块间距 32px | `max-width:896px; margin:0 auto; gap:32px` |
+| 工具条 | `justify-between`，块间距 12px，左组（作用域 + 分隔线 + 计数）/ 右（搜索框） | 同结构（新增 `.dsm-toolbarLeft` 分组） |
+| 作用域按钮 | 高 28px、pill 圆角、内距 0 8px、1px 描边、透明底、14px | 同值 |
+| 搜索框 | 高 36px、圆角 12px、宽 256px、左内距 36px、14px | 同值 |
+| 小节标题 | 14px / 400，块下 16px | 同值 |
+| 操作按钮 | 28×28、圆角 8px、描边、底色透明 | 同值 |
+| 主按钮「新建」 | 高 28px、圆角 8px、反色（深色白底黑字 / 浅色黑底白字） | `label-primary` 底 + `bg-base` 字 |
+| 技能卡片 | 圆角 12px、无描边、深色 `rgba(255,255,255,.05)` / 浅色 `rgba(13,13,13,.03)` | `color-mix(label-primary 4%)` |
+| 行 | 高 65px、内距 12px 16px、间距 12px、行间细分隔线 | 同值 |
+| 图标块 | 36×36、圆角 12px、图标 60% 透明 | 同值 |
+| 名称 / 描述 | 14px/400/21px 与 12px/18px/60% | 同值 |
+| 开关 | 32×18、pill、内距 1px、钮 16px；开=前景色轨 + 背景色钮，关=前景色 30% | 同值 |
+
+### 6.2 两套主题都成立的写法
+
+DSH 主题令牌在浅色下 `bg-layer-1` / `bg-layer-2` **都是纯白**，直接拿来当卡片底色会让层级消失。
+因此凡是「需要分层」的地方改用 `color-mix(in srgb, var(--dsw-alias-label-primary) N%, transparent)`：
+深色下等于白叠层、浅色下等于黑叠层，与 ZCode 的「深色白叠层 / 浅色黑叠层」同构。
+遮罩与阴影按 ZCode 用固定黑色（两套主题一致），其余仍走 `--dsw-alias-*` 令牌。
+
+### 6.3 详情弹窗：正文 Markdown（Codex 风格）
+
+按「类似 Codex 的技能页」的要求，详情弹窗补上 **SKILL.md 正文**：
+
+- 标题右侧加「Skill」徽章；
+- 「描述」下新增「文件内容」：宿主 `/body` 返回 frontmatter 剥离后的正文，前端用内置 Markdown
+  子集渲染成卡片（标题 / 段落 / 列表 / 行内代码片 / 代码块 / 引用 / 链接），卡片自带滚动条（`max-height:min(46vh,420px)`）；
+- 「范围 / 状态 / 文件路径」保持在正文之后；
+- 弹窗正文是 flex 列，可滚动子项必须 `flex:none`，否则会被压成 0 高度（描述消失的根因）。
+
+## 七、作用域扫描策略（2026-10-20）
+
+切换作用域时**只重扫该工作区**，全局/用户根的结果跨作用域复用：
+
+| 作用域 | 显示范围 | 缓存 |
+|---|---|---|
+| 用户 · 本机 | **只**显示全局 `~/.dsh/skills`、用户级 `~/.agents/skills`、预设自定义目录、随包内置目录 | 全局扫描结果缓存 30s，写操作后立即失效 |
+| 工作区 | **只**显示该工作区的 `<projectRoot>/.dsh/skills` 与 `<projectRoot>/.agents/skills` | 每次切换都重扫（只扫这一个工作区） |
+
+- 两个作用域**互斥**：选了工作区就不再混入全局/用户级技能；回到「用户 · 本机」才看全局那批。
+- 宿主注册表给的是「全局 + 当前作用域」的合并视图，这里按来源裁剪：工作区作用域只保留
+  `project-dsh` / `project-agents`，用户作用域只保留非项目来源。
+- 响应级缓存 1s；`GET /state?refresh=1` 绕过两级缓存强制重扫（设置页的「刷新」按钮即走这条）。
+
+实测（桌面实例；modelmux 工作区有 4 个 `.agents/skills` 技能）：
+
+| 请求 | 耗时 | 技能数 |
+|---|---|---|
+| 首次进入用户作用域 | 170ms | 36（用户级 24 + 预设内置 4 + 随包内置 8） |
+| 切到 modelmux 工作区 | **8ms** | **4**（只该工作区的 `.agents/skills`：log-triage、mx-cli、reasonix-mx-test、repo-sync） |
+| 再切回用户作用域 | 4ms | 36 |
+
+## 八、国际化（2026-10-20）
+
+插件界面**跟随宿主的语言设置**：DSH 切到英文时，面板标题、工具条、列表、详情弹窗、导入/新建/删除弹窗与所有错误提示自动切成英文。
+
+### 8.1 机制（宿主官方机制，与 dsh-usage-stats 一致）
+
+插件不再自己侦测语言，而是走宿主 `@deepseek-ai/dsh-client-locale`：
+
+```js
+// 1) 注册字典（走 ctx.effect，卸载时自动注销，热重载不会「重复注册」抛错）
+ctx.effect(() => ctx.locale.register(LOCALE_NS, LOCALE_DICT), "dsh-skills-manager: locale dictionary");
+// 2) 绑定翻译函数：引用稳定，但每次调用读**当前**语言
+boundT = ctx.locale.bind(LOCALE_NS);
+// 3) 组件注册项声明 locale 命名空间：宿主据此注入 t prop
+ctx.slots.register({ name: "sidebar.panellist", id: "skills-manager", order: 30,
+                     locale: LOCALE_NS, label: () => tr(boundT, "section.title") }, PanelIcon);
+ctx.slots.register({ name: "main", key: "skills-manager", locale: LOCALE_NS }, PanelPage);
+```
+
+- 组件用宿主注入的 `props.t`（引用随语言切换而变 → React 自动重渲染，**不用刷新页面**）；`inject = ["slots", "locale"]`。
+- 宿主没有 locale 服务时退回中文兜底（`fallbackT`）并打印告警，不静默装死。
+- 宿主错误响应带稳定 `code` + `params`，客户端按 code 取对应语言文案（无 code 退回原文）。
+
+> 踩坑记录：初版自己读 `document.documentElement.lang` / `navigator.language` 并订阅 locale 服务，结果**不跟随 DSH 的语言设置**（被浏览器语言钉死）。只有宿主机制才有「设置里切语言 → 界面立刻变」的效果。
+
+### 8.2 验证
+
+| 项 | 结果 |
+|---|---|
+| 中英词典键集一致 | 单测锁住（`test/client.test.mjs`） |
+| 词典无空文案 | 单测锁住 |
+| `interpolate` / `fallbackT` / `tr` | 单测覆盖（含「没有 t 时退回中文」） |
+| `localeNs` 与组件注册项一致 | 单测锁住 |
+| **运行时切换** | 设置 → 通用设置 → 语言：中文 → English，**不刷新页面**，本面板标题与全部文案立即变英文；再切回中文立即恢复 |
+
+| 截图 | 内容 |
+|---|---|
+| [docs/images/07-english-ui.png](images/07-english-ui.png) | 切到英文后的技能面板（标题 `Skills`、`User · Local`、`Installed 40`、`+ New`） |
+| [docs/images/08-english-detail-dialog.png](images/08-english-detail-dialog.png) | 英文详情弹窗（`Description` / `File content` / `Skill` 徽章） |
+
+## 九、三处「真能用」的修复（2026-10-21）
+
+### 9.1 DSH 的加载规则（问题根源）
+
+宿主 `@deepseek-ai/dsh-skill-filesystem` 的硬规则（读它的 `parseInvocationPolicy` 与 frontmatter 校验得到）：
+
+1. frontmatter 必须同时有 `name` 与 `description`，**缺一个就整个文件被忽略**；
+2. 出现旧式调用键（`disableModelInvocation` / `modelInvocable` / `userInvocable`）直接判非法，**整个文件被忽略**；
+3. `disable-model-invocation` / `user-invocable` 的取值必须是布尔。
+
+结论：一个没有 description、或带着旧式调用键的技能，**在 DSH 里压根没被加载**。面板里看着在，模型用不了，
+「停用开关」对它也没有意义——这正是「开关是错的、无法使用」的根因。
+
+### 9.2 三处修复
+
+| 缺陷 | 修复 |
+|---|---|
+| 添加技能只有 name 与内容，**没有 desc** | 新建弹窗加「正文（可选）」，三件套齐全；导入外部技能时若源文件缺 description，**复制模式自动补齐**（从正文派生一句），并回报 `normalized` |
+| 启停开关错误、无法使用 | 开关改写 `disable-model-invocation` 的同时**清掉旧式调用键**；列表行给不合规的技能标「DSH 不加载」并把开关置灰，已停用的标「已停用」 |
+| 导入外部 Agent 技能没真正实现 | 来源可展开，逐个技能展示**名称 + 描述**并单独勾选；不合规的标「导入时自动修正」；`link` 模式遇不合规源直接拒收（改不了源文件） |
+
+### 9.3 验证（实机）
+
+| 用例 | 结果 |
+|---|---|
+| 复制导入缺 description 的外部技能 | `normalized: ["added-description"]`，落地文件补上 `description: 外部技能标题`，面板可正常列出 |
+| 复制导入带旧键的外部技能 | `normalized: ["removed-legacy-key"]`，落地文件只剩 `disable-model-invocation` |
+| 软链导入不合规源 | HTTP 400，说明「软链不会修正源文件，请改用直接复制」 |
+| 开关清旧键 | `toggle` 返回 `removedLegacyKeys: ["disableModelInvocation"]` |
+| 列表行 | 不合规技能标「DSH 不加载」、开关置灰；已停用技能标「已停用」 |
+| 单测 | 新增 5 项（诊断 / 派生描述 / 归一化 / 无 frontmatter 补段 / 旧键清理），共 66 项全绿 |
+
+## 十、入口迁移到侧边栏（0.1.4，2026-11-03）
+
+### 10.1 动机与结论
+
+设置页里的「技能」分区位置偏深：要开设置面板再切分区。改为与「插件」「自动化任务」「使用统计」同级的
+侧边栏独立面板后，一步可达，且与这些常驻功能并列。
+
+- 导航行：`sidebar.panellist`，`{id: skills-manager, order: 30}`，图标为自绘书页；宿主负责选中态、
+  收起态与无障碍名称。
+- 主面板：`main` keyed，`key` 与导航行 id 相同；组件 `PanelPage` 自持页骨架（`.dsm-page` 铺满内容列、
+  内层滚动、896px 内容列居中）——`main` 槽位不给页头、内边距与滚动，不自持会让内容贴边且长列表不滚动。
+- 设置页分区注册（`settings.section`）删除，不留重复入口。
+
+### 10.2 验证
+
+| 项 | 结果 |
+|---|---|
+| `npm run check` | 通过（lib 三文件 + client） |
+| `npm test` | 67 项全绿 |
+| 安装 | `plugin_manager install_bundle`（本地目录）→ `application: applied`，0.1.4，无警告 |
+| 桌面端实机（desktop profile） | `dsh-client-hmr` 热替换后**未刷新页面**，侧边栏即出现「技能」（使用统计与更多之间）；点击后主面板渲染标题、作用域下拉、「技能 49」、搜索与「已安装 40」列表，开关与删除按钮齐全 |
+| 截图 | [docs/images/01-sidebar-skills-panel.png](images/01-sidebar-skills-panel.png)、[10-skills-main-panel.png](images/10-skills-main-panel.png) |
+| 全套截图重拍 | 0.1.4 在独立验证实例（`web` profile，`dsh --profile web --patch …`，与日常 profile 隔离）上重拍 01–09：主面板、详情弹窗、更多菜单、导入弹窗、作用域下拉、浅色主题、英文界面、英文详情、切回中文，全部为新侧边栏语境（1440×900） |
+
+未复验项：侧边栏收起态（本次未改 `sidebar.panellist` 的通用渲染，收起由宿主负责）。
+浅色主题与英文界面已在重拍中复验：插件配色随主题、文案随语言，均无需刷新页面。
+
+## 十一、技能详情机器翻译（0.1.5，2026-11-03）
+
+> 这一块的核心实现与设计理念单独成文：[TRANSLATION.md](./TRANSLATION.md)。本节只记需求、结论与验证。
+
+### 11.1 需求与结论
+
+读英文技能介绍时需要翻译。结论：**复用宿主的 `translator` 服务**，不自建翻译通道。
+
+- 主机侧 `translator` 服务由 `dsh-experimental-cot-translation-bundle` 提供
+  （`@deepseek-ai/dsh-experimental-translator`），与「思考过程机器翻译」共用
+  provider（默认 Bing）与端点配置。
+- 本插件只在主机半加一条 `POST /dsh-skills-manager/translate`：
+  `ctx.get('translator')` → `resolve({ text, targetLanguage })` → `translate(spec)`，
+  把结果回给客户端；服务缺失时返回 `translator-unavailable`。
+- 客户端不做翻译，只做分块、缓存与展示。
+
+### 11.2 客户端行为
+
+- 详情弹窗默认开启翻译：描述与正文各译一次，技能名不参与（它是标识符）。
+- 单块上限 3500 字符（宿主默认 `maxTextChars=4000`），长正文按空行切块逐块翻译后拼回。
+- 结果按「目标语言 + 原文」缓存在内存，反复开关弹窗不重复请求。
+- 翻译中 / 失败 / 开关关闭 / 正在看原文 —— 都回落到原文；失败时状态条给出本地化提示。
+- 目标语言固定 `zh`（技能正文以英文为主，与宿主机翻配置一致）。
+
+### 11.3 验证
+
+| 项 | 结果 |
+|---|---|
+| 分块单测 | 新增 3 项（长文本切块、短文本/空文本、单段超长硬切），共 70 项全绿 |
+| 隔离实例实机 | web profile + 官方 bundle 的 patch 行（translator / cot-translation / 本插件），1440×900 |
+| 翻译效果 | 英文技能的描述与正文均译为中文，`name` 保持英文，Markdown 结构保留 |
+| 对照开关 | 「看原文」切回英文原文，链接变为「看译文」 |
+| 截图 | [docs/images/11-skill-detail-translation.png](images/11-skill-detail-translation.png) |
+
+未复验：`translator-unavailable` 的降级提示（需要在未启用该 bundle 的 profile 里跑，
+本次验证实例显式注入了该 bundle）。
+
+## 十二、去掉新建、导入补 ZCode、修好启停（0.1.7，2026-11-03）
+
+### 12.1 三处改动
+
+- **移除「新建」**：工具条不再提供新建技能，主机半的 `POST /create` 路由一并下线
+  （`createRoute` 与 `CreateModal`、相关文案与图标同时删掉）。
+- **导入来源新增 ZCode**：`externalAgentRoots()` 增加 `{ id: 'zcode', label: 'ZCode', path: ~/.zcode/skills }`，
+  与 Codex CLI / Claude Code / Gemini CLI / Qwen Code 并列。
+- **修好技能启停**：见下。
+
+### 12.2 启停为什么之前「关了还能用」
+
+DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `parseInvocationPolicy`）：
+
+| 键 | 派生 | 把守的入口 |
+|---|---|---|
+| `disable-model-invocation: true` | `modelInvocable: false` | 模型自行加载：`tool-skill` 的 `skill` 工具在加载前检查 `isModelInvocable`，会话技能目录也 `.filter(isModelInvocable)` |
+| `user-invocable: false` | `userInvocable: false` | 用户点名调用：`agent/pre-step` 只检查 `isUserInvocable`，通过就把技能内容注入会话 |
+
+本插件此前只写第一个键，于是出现「模型确实调不到，但用户在对话里点名照样能用」的现象——
+因为 `userInvocable` 缺省为 `true`。现在 `setSkillInvocation()` 把两个键一起写：
+停用写 `disable-model-invocation: true` + `user-invocable: false`，启用把两行都删掉。
+
+函数语义：**未给出的键保持原样**（部分更新），给出 `false` 写禁用键、给出 `true` 删除对应键。
+写回仍然保真（BOM、CRLF/LF、正文逐字），且只认行首 `---` 的 frontmatter 结束标记。
+
+### 12.3 验证
+
+| 项 | 结果 |
+|---|---|
+| `npm test` | 70 项全绿（新增：ZCode 来源、两个键一起写/删除、部分更新不误改另一侧、块标量安全） |
+| `dsh web` 实例实机 | 工具条只剩「…（导入）」与刷新；导入弹窗来源列出 ZCode；开关往返后 SKILL.md 与操作前逐字一致 |
+| 截图 | [03-more-menu.png](images/03-more-menu.png)、[04-import-external-agent-skills.png](images/04-import-external-agent-skills.png)、[10-skills-main-panel.png](images/10-skills-main-panel.png) 已按新界面重拍 |
+
+已知边界：DSH 每步重算技能目录，所以停用对**后续**轮次生效；但已经注入到当前会话历史里的
+技能内容不会被撤回，模型仍可能引用它。界面在开关的 `title` 里写明了这一点。
+
+## 十三、回滚
+
+`plugin_manager remove_bundle`（目标 `@bluechonk/dsh-skills-manager`），或在 profile 的 `cordis.patch.yml` 里把 `@bluechonk/dsh-skills-manager` 行置为 `disabled: true`。插件自身不写任何持久化数据（仅在 profile 目录留一份 `skills-manager.log` 审计日志）。

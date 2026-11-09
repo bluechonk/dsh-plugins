@@ -1,0 +1,68 @@
+{
+  "name": "@bluechonk/dsh-skills-manager",
+  "version": "0.1.7",
+  "description": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认开启，复用宿主 translator 服务）、启停开关、从外部 Agent 技能目录导入（软链或复制）、删除与打开目录。",
+  "icon": "./icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-model-selection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  },
+  "files": [
+    "lib/index.js",
+    "lib/roots.js",
+    "lib/frontmatter.js",
+    "client/client.js",
+    "cordis.patch.yml",
+    "locale/en.json",
+    "locale/zh.json",
+    "icon.svg",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "check": "node --check lib/index.js && node --check lib/roots.js && node --check lib/frontmatter.js && node --check client/client.js"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "skills",
+    "agent-skills",
+    "sidebar-panel"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bluechonk/dsh-skills-manager.git"
+  },
+  "homepage": "https://github.com/bluechonk/dsh-skills-manager#readme",
+  "bugs": {
+    "url": "https://github.com/bluechonk/dsh-skills-manager/issues"
+  },
+  "author": "BlueChonk",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.15.0"
+  }
+}

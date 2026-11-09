@@ -1,0 +1,2258 @@
+// dsh-usage-stats client 半边（SPEC §0/§5/§6）。
+//
+// 职责（单文件）：侧边栏导航「使用统计」独立模块（sidebar.panellist + main keyed）——
+//   六格终身摘要条 / Token 活动热力图（每日/每周/累计三档）/ 时间范围胶囊（近 7 日/近 30 日）/ 
+//   每日 Token 趋势折线（手写 monotone 三次插值）/ 模型用量环形图 / 右下刷新按钮；
+//   三态（加载中… / 暂无使用数据 / 加载失败+重试）。
+//   时效面：60s 轻轮询（silent 档 = summary + 当前 range 的 trend + models，
+//   另按需补 heatmap；document.hidden 跳拍，回前台立即补一拍）+
+//   「更新于 HH:MM」（本轮每一路都成功才推进）；回填面：挂载即读一次状态，未在跑就按需
+//   补拉热力图（数据变了才拉，§6），在跑就进入跟踪态（单 ticker，800ms 一拍，
+//   「已扫 X/Y 会话」），跑完自动全量刷新。
+//
+// 数据源（SPEC §5，全部同源相对路径 GET，四路互不拖垮）：
+//   /api/dsh-usage-stats/summary · /heatmap?days=366 · /trend?days=7|30 · /models?days=0
+//   演示数据零内置——所有数字来自 API；拿不到就显式降级，绝不静默兜假数。
+//
+// 主题挂法：官方 dsh-client-ui-theme 的双档载体是 body 属性——浅=body、
+//   深=body[data-ds-dark-theme]。
+//   因此把变量表翻译成 body / body[data-ds-dark-theme]
+//   两档 CSS 自定义属性，纯 CSS 级联自动跟随官方主题，零 JS 监听（同生态插件同哲学：
+//   官方变量自动跟随，插件不自持主题状态）。
+//
+// 取舍记录（SPEC未覆盖处）：
+//   ① 环形图尺寸按 SPEC §6.2 明文值取 rO=76 / rI=50.4（200 视箱），
+//      不用百分比口径——注释与实现值不一致时以实现值为准。
+//   ② 模型用量恒为**全期**口径（/models?days=0），不随「近 7 日/近 30 日」变化；
+//      「时间范围」只作用于趋势折线。换档不重拉 models（全期与 range 无关）。
+//   ③ 图表 tooltip/图例 token 数用万/亿短格式（SPEC §6）；摘要条同口径，
+//      精确千分位只出现在元素的 title 悬停说明里。
+//   ④ 模型显示名用SPEC主键 provider/model 全串（models 路由的 key）——不同供应商
+//      同名模型会撞色撞名，全串无歧义。
+//   ⑤ 趋势折线最多画用量最高的 6 个模型（图例/折线/悬停行共用同一份清单），
+//      不做「其他模型」归并（归并是环形图的明文要求）；被截掉的模型数在悬停卡片里按
+//      「悬停日当天」注明（区间级会天天显示同一个数）。
+//   ⑥ 悬停卡片定宽 230（TIP_W）——定位数学可精确钳位，不做「渲染后量尺寸」的二段定位；
+//      热力图/环形图/趋势图共用同一张卡片（§6）。
+//
+// 样式全部 dus-* 前缀，零官方类名依赖；<style> 注入走 data-plugin-css 去重
+//   （热重载原位替换）。组件崩溃经 SectionBoundary 兜底（主面板组件崩溃会拖白中心列）。
+window.__ModuleLoader__.load({
+  // 模块 id 必须与包名逐字一致——宿主按包名注册 factory，id 不符会报
+  // 「loaded without registering … via __ModuleLoader__.load」并让整个插件加载失败。
+  id: "@bluechonk/dsh-usage-stats",
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+
+    let react = require("react");
+    let react_jsx_runtime = require("react/jsx-runtime");
+
+    const PREFIX = "[dsh-usage-stats] ";
+
+    //#region 国际化（宿主 @deepseek-ai/dsh-client-locale）
+    // 字典内联在此：client 半走 __ModuleLoader__ 的工厂格式，宿主 require 只认固定
+    // 模块表（react / zod / …），不支持相对路径 require——单文件自包含是硬约束。
+    // 宿主机制：ctx.locale.register(ns, {zh, en}) 注册字典；组件注册项声明 locale: ns 后，
+    // 宿主注入 t prop（引用随语言切换而变 → React 自动重渲染，无需刷新页面）。
+    const LOCALE_NS = "dsh-usage-stats";
+    const LOCALE_DICT = {
+      zh: {
+        sectionLabel: "使用统计",
+        sectionBadge: "应用用量",
+        summaryTotalTokens: "累计 Token 数",
+        summaryPeakTokens: "峰值 Token 数",
+        summaryCacheHitRate: "缓存命中率",
+        summaryLongestChat: "最长聊天时长",
+        summaryCurrentStreak: "当前连续天数",
+        summaryLongestStreak: "最长连续天数",
+        summaryTotalTokensHint: "输入 + 输出 + 缓存命中 + 缓存写入，全期求和",
+        summaryPeakTokensHint: "单日四桶之和最大的一天",
+        summaryCacheHitRateHint: "缓存命中 Token ÷（缓存命中 + 未缓存输入）；无输入时显示「—」",
+        summaryCacheHitRateEmpty: "暂无输入用量，无法计算缓存命中率",
+        summaryLongestChatHint: "按（会话, 日）分桶取最长一次，跨日会话按日截断",
+        summaryCurrentStreakHint: "每天有用量算一天；今天还没有用量时从昨天往回数",
+        summaryLongestStreakHint: "历史最长的连续有用量天数",
+        heatmapTitle: "Token 活动",
+        heatmapModeDaily: "每日",
+        heatmapModeWeekly: "每周",
+        heatmapModeTotal: "累计",
+        heatmapAriaLabel: "Token 活动热力图，{year} 年 1 月至 12 月，共 {days} 天有用量。用 ← → 切换周、↑ ↓ 切换日。",
+        heatmapTooltipDay: "{date} · {tokens} tokens · {turns} 轮消息",
+        heatmapTooltipWeek: "周 {start} 起",
+        heatmapTooltipTotal: "累计 {date} 起",
+        heatmapColumnTitle: "{date} · {tokens} tokens",
+        heatmapColumnTitleTurns: "{date} · {tokens} tokens · {turns} 轮消息",
+        heatmapColumnRange: "{start} 至 {end}",
+        heatmapCumLabel: "累计 {value}",
+        rangeTitle: "时间范围",
+        rangeLast7: "近 7 日",
+        rangeLast30: "近 30 日",
+        trendTitle: "每日 Token 趋势图",
+        trendAriaLabel: "每日 Token 趋势图，{range}，共 {count} 个数据点。用 ← → 移动游标。",
+        trendSingleDayPeak: "单日峰值 {value}",
+        trendTopShare: "占比最高（{value}）",
+        trendOtherModels: "另有 {count} 个模型未列出",
+        trendTooltipTotal: "{date} · {tokens} tokens",
+        donutTitle: "模型用量",
+        donutAriaLabel: "模型用量环形图，共 {count} 个模型，{total} tokens",
+        donutEmpty: "暂无模型用量。",
+        donutOtherModels: "其他模型",
+        donutTooltipRow: "{name} {share} · {tokens} tokens",
+        donutTooltipTotal: "全部 {total} tokens",
+        stateLoading: "加载中…",
+        stateEmpty: "暂无使用数据",
+        stateEmptyDesc: "开始对话后这里会显示 Token 活动与模型用量；若刚装上插件，历史会话会在后台自动补进来。",
+        stateError: "加载失败",
+        stateErrorDesc: "统计服务暂时不可用，请稍后重试。",
+        stateNoTrend: "暂无趋势数据。",
+        degradeSummary: "摘要数据加载失败，请重试。",
+        degradeHeatmap: "活动数据加载失败，请重试。",
+        degradeTrend: "趋势数据加载失败，请重试。",
+        degradeModels: "模型用量加载失败，请重试。",
+        degradeSummaryStale: "摘要数据未更新，显示为上次数据。",
+        degradeHeatmapStale: "活动数据更新失败，显示为上次数据。",
+        degradeTrendStale: "趋势数据未更新，显示为上次数据。",
+        degradeModelsStale: "模型用量未更新，显示为上次数据。",
+        degradeRetry: "重试",
+        footUpdatedAt: "更新于 {time}",
+        footPartial: "（部分数据未更新）",
+        footNoData: "尚未取得数据（部分数据未更新）",
+        footStale: "最近一次刷新有部分数据没取到，显示的是上一次的值",
+        footRefresh: "刷新",
+        footRefreshing: "刷新中…",
+        backfillRunning: "正在回填历史会话…",
+        backfillProgress: "已扫 {scanned}/{total} 会话",
+        backfillProgressSuffix: "，完成后这里会自动显示统计。",
+        backfillRunningScanned: "正在回填历史会话…（已扫 {scanned}/{total} 会话，完成后这里会自动显示统计。）",
+        backfillTakesMinutes: "历史多时需要几分钟，完成后这里会自动显示统计。",
+        backfillDone: "回填完成：补了 {sessions} 个会话、{records} 条记录。",
+        backfillFailed: "回填失败：{reason}",
+        backfillAlreadyRunning: "已有一次回填在进行中，稍后再试。",
+        backfillStatusUnavailable: "回填进度暂不可查，可稍后点「刷新」。",
+        backfillStatusFailed: "回填进度查询失败：{reason}",
+        backfillLoadFailed: "装载时读取回填状态失败：{reason}",
+        backfillMirror: "当前是只读镜像（另一窗口持写锁），接管后会自动补齐，无需手动回填。",
+        fmtWan: "万",
+        fmtYi: "亿",
+        fmtCumulative: "累计 {value}",
+        fmtSince: "，自 {date} 起",
+        fmtSingleDayPeak: "单日峰值 {value}（{date}）",
+        fmtNoUsage: "暂无用量",
+        fmtDays: "{count} 天",
+        fmtHoursMinutes: "{hours} 小时 {minutes} 分",
+        fmtMinutes: "{minutes} 分钟",
+        fmtMonthDay: "{month}月{day}日",
+        fmtDayOnly: "{day}日",
+        fmtFullDate: "{year}年{month}月{day}日",
+        fmtMonth: "{month}月",
+        fmtTokens: "{value} Token / 输入合计 {total}",
+        fmtInputTotal: "输入合计 {total}",
+        fmtCacheHit: "缓存命中 {value}",
+        fmtContains: "包含：{value}",
+        fmtTurns: "{count} 轮消息",
+        errorNetwork: "网络不可达：{reason}",
+        errorParse: "响应解析失败：{reason}",
+        errorShape: "{name} 响应形状不符SPEC §5，按失败降级。",
+        errorUnknown: "未知错误",
+        errorHostNoSlots: "宿主未提供 slots，设置分区未注册。",
+        errorPanelRender: "统计面板渲染异常，数据采集不受影响。详情已打印到控制台（F12 查看）",
+      },
+      en: {
+        sectionLabel: "Usage Stats",
+        sectionBadge: "App Usage",
+        summaryTotalTokens: "Total Tokens",
+        summaryPeakTokens: "Peak Tokens",
+        summaryCacheHitRate: "Cache Hit Rate",
+        summaryLongestChat: "Longest Chat",
+        summaryCurrentStreak: "Current Streak",
+        summaryLongestStreak: "Longest Streak",
+        summaryTotalTokensHint: "Input + output + cache reads + cache writes, summed over all time",
+        summaryPeakTokensHint: "The day with the largest sum of the four buckets",
+        summaryCacheHitRateHint: "Cache-read tokens ÷ (cache reads + uncached input); shows an em dash when there is no input",
+        summaryCacheHitRateEmpty: "No input usage yet, cache hit rate cannot be computed",
+        summaryLongestChatHint: "Longest single chat per (session, day); cross-day chats are cut at day boundaries",
+        summaryCurrentStreakHint: "A day counts when it has usage; if today has none, counting starts from yesterday",
+        summaryLongestStreakHint: "Longest run of consecutive days with usage",
+        heatmapTitle: "Token Activity",
+        heatmapModeDaily: "Daily",
+        heatmapModeWeekly: "Weekly",
+        heatmapModeTotal: "Total",
+        heatmapAriaLabel: "Token activity heatmap, January to December {year}, {days} days with usage. Use left and right arrows for weeks, up and down for days.",
+        heatmapTooltipDay: "{date} · {tokens} tokens · {turns} turns",
+        heatmapTooltipWeek: "Week of {start}",
+        heatmapTooltipTotal: "Total since {date}",
+        heatmapColumnTitle: "{date} · {tokens} tokens",
+        heatmapColumnTitleTurns: "{date} · {tokens} tokens · {turns} turns",
+        heatmapColumnRange: "{start} to {end}",
+        heatmapCumLabel: "Total {value}",
+        rangeTitle: "Time Range",
+        rangeLast7: "Last 7 Days",
+        rangeLast30: "Last 30 Days",
+        trendTitle: "Daily Token Trend",
+        trendAriaLabel: "Daily token trend, {range}, {count} data points. Use left and right arrows to move the cursor.",
+        trendSingleDayPeak: "Single-day peak {value}",
+        trendTopShare: "Largest share ({value})",
+        trendOtherModels: "{count} more models not listed",
+        trendTooltipTotal: "{date} · {tokens} tokens",
+        donutTitle: "Model Usage",
+        donutAriaLabel: "Model usage donut, {count} models, {total} tokens",
+        donutEmpty: "No model usage yet.",
+        donutOtherModels: "Other models",
+        donutTooltipRow: "{name} {share} · {tokens} tokens",
+        donutTooltipTotal: "All {total} tokens",
+        stateLoading: "Loading…",
+        stateEmpty: "No usage data yet",
+        stateEmptyDesc: "Start a conversation to see token activity and model usage; if you just installed the plugin, past sessions are backfilled in the background.",
+        stateError: "Failed to load",
+        stateErrorDesc: "The stats service is temporarily unavailable, please try again later.",
+        stateNoTrend: "No trend data yet.",
+        degradeSummary: "Summary data failed to load, please retry.",
+        degradeHeatmap: "Activity data failed to load, please retry.",
+        degradeTrend: "Trend data failed to load, please retry.",
+        degradeModels: "Model usage failed to load, please retry.",
+        degradeSummaryStale: "Summary data is stale, showing the last values.",
+        degradeHeatmapStale: "Activity data is stale, showing the last values.",
+        degradeTrendStale: "Trend data is stale, showing the last values.",
+        degradeModelsStale: "Model usage is stale, showing the last values.",
+        degradeRetry: "Retry",
+        footUpdatedAt: "Updated at {time}",
+        footPartial: "(some data not updated)",
+        footNoData: "No data yet (some data not updated)",
+        footStale: "The last refresh did not fetch everything; showing the previous values",
+        footRefresh: "Refresh",
+        footRefreshing: "Refreshing…",
+        backfillRunning: "Backfilling past sessions…",
+        backfillProgress: "{scanned}/{total} sessions scanned",
+        backfillProgressSuffix: ", stats appear here once it finishes",
+        backfillRunningScanned: "Backfilling past sessions… (scanned {scanned}/{total} sessions, stats appear here once it finishes)",
+        backfillTakesMinutes: "This can take a few minutes with many sessions; stats appear here once it finishes.",
+        backfillDone: "Backfill complete: {sessions} sessions and {records} records added.",
+        backfillFailed: "Backfill failed: {reason}",
+        backfillAlreadyRunning: "A backfill is already running, try again later.",
+        backfillStatusUnavailable: "Backfill progress is unavailable for now; click Refresh later.",
+        backfillStatusFailed: "Failed to read backfill progress: {reason}",
+        backfillLoadFailed: "Failed to read backfill status on load: {reason}",
+        backfillMirror: "This instance is a read-only mirror (another window holds the write lock). It will catch up automatically once it takes over.",
+        fmtWan: "K",
+        fmtYi: "B",
+        fmtCumulative: "Total {value}",
+        fmtSince: ", since {date}",
+        fmtSingleDayPeak: "Single-day peak {value} ({date})",
+        fmtNoUsage: "No usage yet",
+        fmtDays: "{count} d",
+        fmtHoursMinutes: "{hours} h {minutes} min",
+        fmtMinutes: "{minutes} min",
+        fmtMonthDay: "{month}/{day}",
+        fmtDayOnly: "{day}",
+        fmtFullDate: "{year}/{month}/{day}",
+        fmtMonth: "{month}",
+        fmtTokens: "{value} tokens / {total} input",
+        fmtInputTotal: "{total} input",
+        fmtCacheHit: "cache hit {value}",
+        fmtContains: "includes: {value}",
+        fmtTurns: "{count} turns",
+        errorNetwork: "Network unreachable: {reason}",
+        errorParse: "Failed to parse the response: {reason}",
+        errorShape: "{name} response does not match SPEC §5, treated as a failure.",
+        errorUnknown: "Unknown error",
+        errorHostNoSlots: "The host did not provide slots; the settings section was not registered.",
+        errorPanelRender: "The stats panel failed to render; data collection is unaffected. Details are in the console (F12).",
+      },
+    };
+
+    /** 填 {name} 占位符（与宿主 translate 的规则一致）。 */
+    function interpolate(template, params) {
+      if (params === null || params === undefined) return template;
+      return String(template).replace(/\{(\w+)\}/g, (match, name) =>
+        name in params ? String(params[name]) : match,
+      );
+    }
+
+    /** 中文兜底翻译器：纯函数拿不到宿主 t 时用它（输出与中文版逐字相同）。
+     *  未命中的 key 回退到 key 本身——与宿主行为一致，不会漏显文案。 */
+    function fallbackT() {
+      return (key, params) => {
+        const dict = LOCALE_DICT.zh;
+        const template = Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : key;
+        return interpolate(template, params);
+      };
+    }
+
+    /** 取文案：t 缺省时用中文兜底（纯函数直测面因此不依赖宿主）。
+     *  占位符没被替换时（字典与调用点的参数名对不上）会残留 "{name}" 文本——
+     *  这种情况属于开发期错误，告警一次，别让它悄悄显示到界面上。 */
+    function tr(t, key, params) {
+      const text = (t === null || t === undefined ? fallbackT() : t)(key, params);
+      if (typeof text === "string" && text.includes("{") && text.includes("}")) {
+        console.warn(PREFIX + "unresolved placeholder in translation key: " + key + " -> " + text);
+      }
+      return text;
+    }
+
+    //#region css（CSS 变量表 dark/light 两档；挂 body 与 body[data-ds-dark-theme]）
+    // 配色对齐 ZCode 的「使用统计」面板（变量名 --color-usage-chart-1..6 / --color-usage-heatmap-0..4）：
+    //   深色档 chart = sky-600 / teal-600 / violet-600 / rose-500 / indigo-500 / cyan-600
+    //   浅色档 chart = sky-500 / teal-400 / violet-400 / rose-400 / indigo-400 / cyan-400
+    // 热力图用 ZCode 的「蓝 × 背景」混合法（color-mix）：与主题天然协调，换主题不用重调色阶。
+    const css = [
+      // —— 变量表：浅档在 body，深档覆盖在 body[data-ds-dark-theme]（官方主题载体）——
+      "body{--dus-bg:#ffffff;--dus-surface:rgba(0,0,0,.03);--dus-surface70:rgba(0,0,0,.021);" +
+        "--dus-border:rgba(0,0,0,.09);--dus-fg:#17171a;--dus-fgsubtle:rgba(23,23,26,.62);--dus-fgfaint:rgba(23,23,26,.40);" +
+        // 六色（ZCode 浅色档）
+        "--dus-c1:oklch(68.5% .169 237.323);--dus-c2:oklch(77.7% .152 181.912);--dus-c3:oklch(70.2% .183 293.541);" +
+        "--dus-c4:oklch(71.2% .194 13.428);--dus-c5:oklch(67.3% .182 276.935);--dus-c6:oklch(78.9% .154 211.53);" +
+        // 热力图五档：蓝 × 空格子底（ZCode 浅色档：sky-400 混合 0/24/42/62/78%）
+        // 0 档 = 空格子底色：必须与卡片背景有可见反差，否则整张网格「消失」
+        "--dus-hm0:rgba(0,0,0,.05);" +
+        // 未到的日子只用虚线勾轮廓：给填充色会与「有量但为 0 档」混淆，也给不出「还没发生」的语义
+        "--dus-hmfuture:rgba(0,0,0,.16);" +
+        "--dus-hm1:color-mix(in oklab, oklch(74.6% .16 232.661) 24%, var(--dus-hm0));" +
+        "--dus-hm2:color-mix(in oklab, oklch(74.6% .16 232.661) 42%, var(--dus-hm0));" +
+        "--dus-hm3:color-mix(in oklab, oklch(74.6% .16 232.661) 62%, var(--dus-hm0));" +
+        "--dus-hm4:color-mix(in oklab, oklch(82.8% .111 230.318) 78%, var(--dus-hm0));" +
+        "--dus-ttbg:#ffffff}",
+      "body[data-ds-dark-theme]{--dus-bg:#151517;--dus-surface:rgba(255,255,255,.05);--dus-surface70:rgba(255,255,255,.035);" +
+        "--dus-border:rgba(255,255,255,.10);--dus-fg:#ededee;--dus-fgsubtle:rgba(237,237,238,.58);--dus-fgfaint:rgba(237,237,238,.38);" +
+        // 六色（ZCode 深色档）
+        "--dus-c1:oklch(58.8% .158 241.966);--dus-c2:oklch(60% .118 184.704);--dus-c3:oklch(54.1% .281 293.009);" +
+        "--dus-c4:oklch(64.5% .246 16.439);--dus-c5:oklch(58.5% .233 277.117);--dus-c6:oklch(60.9% .126 221.723);" +
+        // 热力图五档：蓝 × 空格子底（ZCode 深色档：sky-500/600 混合 18/36/58/82%）
+        // 0 档 = 空格子底色：深色下取「比卡片背景略亮」的灰，保证网格轮廓可见
+        "--dus-hm0:rgba(255,255,255,.075);" +
+        "--dus-hmfuture:rgba(255,255,255,.20);" +
+        "--dus-hm1:color-mix(in srgb, oklch(68.5% .169 237.323) 18%, var(--dus-hm0));" +
+        "--dus-hm2:color-mix(in srgb, oklch(68.5% .169 237.323) 36%, var(--dus-hm0));" +
+        "--dus-hm3:color-mix(in srgb, oklch(58.8% .158 241.966) 58%, var(--dus-hm0));" +
+        "--dus-hm4:color-mix(in srgb, oklch(50% .134 242.749) 82%, var(--dus-hm0));" +
+        "--dus-ttbg:#232327}",
+      // —— 主面板页面骨架（与官方「自动化任务」页同构：页面自持滚动与内边距）——
+      // 中心列不给内边距，页面必须自己撑满高度并接管滚动，否则内容会贴边或被裁。
+      ".dus-page{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;color:var(--dus-fg);background:var(--dsw-alias-bg-base,transparent)}",
+      ".dus-pageScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}",
+      ".dus-pageContent{max-width:960px;margin:0 auto;padding:28px clamp(24px,4vw,48px) 48px}",
+      "[data-platform=darwin] .dus-pageContent{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}",
+      // —— 面板骨架（对齐 ZCode「使用统计」的版式节奏）——
+      ".dus-root{display:flex;flex-direction:column;gap:20px;max-width:860px;min-width:0;margin:0 auto;color:var(--dus-fg)}",
+      ".dus-head{display:flex;flex-direction:column;gap:2px}",
+      ".dus-titleRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
+      // 标题：ZCode 为 30px/600/字距-0.75px；DSH 面板宽度有限，取 22px 保持同一比例观感
+      // 页面是主面板而非设置分区，标题用 h1 做页级标题（margin 归零，行高与卡片节奏不变）
+      ".dus-title{font-size:22px;font-weight:600;letter-spacing:-.01em;line-height:1.3;margin:0}",
+      // 「应用用量」徽章：ZCode 是胶囊形（rounded-full px-3 py-1），此处对齐
+      ".dus-badge{display:inline-flex;align-items:center;padding:3px 12px;border-radius:999px;background:var(--dus-surface);border:1px solid var(--dus-border);color:var(--dus-fgsubtle);font-size:12px;font-weight:500;line-height:1.5;white-space:nowrap}",
+      ".dus-card{background:var(--dus-surface);border-radius:12px;padding:16px}",
+      ".dus-cardTight{padding:12px}",
+      ".dus-secHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}",
+      ".dus-secTitle{font-size:14px;font-weight:500}",
+      // —— A1 六格摘要条（自适应换行：宽度不足时整格折行，标签不再截断）——
+      // 分隔线不画在格子的 border 上——折行时 border-left/right 必然在行首或行尾留孤线。
+      // 改用「1px 列间隙 + 格子的外扩阴影」画线：阴影正好落在间隙里，行与行之间不画线，
+      // 因此新行首格左侧不会有竖线；末列阴影溢出容器 1px，被 overflow:hidden 裁掉。
+      // Grid 而非 Flex：auto-fit 轨道等宽，末行只有一格时不会被拉成整行宽。
+      ".dus-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));column-gap:1px;row-gap:0;overflow:hidden}",
+      ".dus-cell{padding:12px 16px;text-align:center;min-width:0;box-shadow:1px 0 0 var(--dus-border)}",
+      ".dus-cellV{font-size:17px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".dus-cellK{font-size:13px;color:var(--dus-fgsubtle);margin-top:4px;line-height:1.35;overflow-wrap:anywhere}",
+      // —— 胶囊 Tab（h-7 = 容器 2px 内衬 + 26px 按钮；激活项反色）——
+      ".dus-pills{display:inline-flex;gap:2px;background:var(--dus-surface);border-radius:999px;padding:2px}",
+      ".dus-pill{height:26px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--dus-fgsubtle);font-family:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}",
+      ".dus-pillOn{background:var(--dus-bg);color:var(--dus-fg);font-weight:500}",
+      "body:not([data-ds-dark-theme]) .dus-pillOn{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08)}",
+      // 焦点环（v0.2.0 §6）：键盘可达面显式可见，不依赖 UA 默认（按钮 border:0 时各浏览器表现不一）
+      ".dus-pill:focus-visible,.dus-btnOutline:focus-visible,.dus-hmWrap:focus-visible,.dus-chartWrap:focus-visible{outline:2px solid var(--dus-c1);outline-offset:2px}",
+      ".dus-pill:focus-visible{border-radius:999px}",
+      // —— A2 热力图（当年 1–12 月；列数 52~54 随年份变化，minmax(0,1fr) 等分容器宽度，不出滚动条）——
+      // 模板由组件内联给出，CSS 里的 52 只是首帧兜底占位。
+      ".dus-hmWrap{position:relative;border-radius:8px}",
+      ".dus-hmGrid{display:grid;grid-template-columns:repeat(52,minmax(0,1fr));gap:0 2px}",
+      ".dus-hmCol{display:flex;flex-direction:column;gap:4px;min-width:0}",
+      // 热力格：ZCode 用圆角方块（rounded），此处取 3px（小尺寸下比例相当）
+      // 无描边（与 ZCode 一致：纯色块）；border 保留 1px transparent 作占位，防有/无数据时尺寸跳动
+      ".dus-hmCell{aspect-ratio:1;width:100%;min-width:0;border-radius:3px;border:1px solid transparent;display:block;transition:transform .08s}",
+      ".dus-hmCell:hover{transform:scale(1.12);border-color:var(--dus-fgsubtle)}",
+      // 未到的日子：空心虚线占位——与已过月份的实心色块一眼可分，且不参与悬停放大
+      ".dus-hmCellFuture{background:transparent;border:1px dashed var(--dus-hmfuture)}",
+      ".dus-hmCellFuture:hover{transform:none;border-color:var(--dus-hmfuture)}",
+      // 年外格（1/1 之前、12/31 之后的周内尾巴）只保留占位撑住网格，不画
+      ".dus-hmCellOut{background:transparent;border-color:transparent;visibility:hidden}",
+      // 键盘游标格描边：只有「有数据的日子」才弹卡片，落在空日期上若无标记就完全没反馈
+      ".dus-hmCur{outline:2px solid var(--dus-c1);outline-offset:1px}",
+      ".dus-hmMonths{display:grid;grid-template-columns:repeat(52,minmax(0,1fr));gap:0 2px;margin-top:12px}",
+      // 月份标签按文字自然宽度绘制、不做裁剪：整月的一段列宽足够放下「12月」，末月再右对齐兜底，
+      // 保证任何卡宽下文字都向左生长、不会越出卡片。
+      ".dus-hmMonths span{min-width:0;overflow:visible;white-space:nowrap;font-size:12px;color:var(--dus-fgsubtle)}",
+      ".dus-hmMonths .dus-hmMonthEnd{text-align:right}",
+      // —— A3 时间范围行（margin-bottom:-6px：20 栅格 gap 视觉收成 14）——
+      ".dus-rangeHead{margin-bottom:-6px}",
+      // —— A4 趋势折线 ——
+      ".dus-chartInner{padding:0 12px 12px}",
+      ".dus-legend{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--dus-fgsubtle);margin-bottom:12px}",
+      ".dus-legendSw{width:10px;height:10px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:-1px;flex:none}",
+      // 图例纯展示：不可点击，最多 6 个模型（按区间用量降序）
+      ".dus-legendItem{display:inline-flex;align-items:center;max-width:100%;padding:2px 4px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}",
+      ".dus-chartWrap{position:relative}",
+      // X 轴日期：12px、次级色（SVG 已改为 1:1 渲染，字号不再随容器缩小而缩放）
+      ".dus-axisTxt{font-size:12px;fill:var(--dus-fgsubtle)}",
+      ".dus-gridLn{stroke:var(--dus-border);stroke-dasharray:3 3}",
+      // 悬停卡片（ZCode 同款：标题当日总量 + 分模型行）。v0.2.0 起热力图/环形图共用同一张卡片：
+      // 定宽 = TIP_W 的**边框盒**（box-sizing:border-box，否则 padding/border 会让实际宽多 22px、
+      // 钳位数学失真）；max-width 收进窄容器。不做「先渲染再量尺寸」的回流补救。
+      ".dus-tip{position:absolute;box-sizing:border-box;width:230px;max-width:calc(100% - 16px);pointer-events:none;z-index:5;background:var(--dus-ttbg);border:1px solid var(--dus-border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.22);padding:8px 10px;font-size:12px}",
+      ".dus-tipH{font-weight:600;margin-bottom:5px}",
+      ".dus-tipL{color:var(--dus-fgsubtle);font-variant-numeric:tabular-nums}",
+      ".dus-tipR{display:flex;align-items:center;gap:8px;padding:2px 0;color:var(--dus-fgsubtle)}",
+      ".dus-tipN{flex:1;min-width:0;padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".dus-tipV{font-family:ui-monospace,\"SF Mono\",\"Cascadia Mono\",Consolas,monospace;font-weight:500;color:var(--dus-fg);font-variant-numeric:tabular-nums}",
+      ".dus-tipU{color:var(--dus-fgsubtle);margin-left:4px}",
+      ".dus-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}",
+      // 空心圈=该模型没画线（图上只有前 6 条）：实心/空心与「已画/未画」一一对应
+      ".dus-tipROff .dus-dot{box-sizing:border-box;border:1px solid var(--dus-fgsubtle);background:transparent}",
+      ".dus-tipROff .dus-tipN{color:var(--dus-fgsubtle)}",
+      // —— A5 环形图（图例两行式：上行=圆点+完整模型名+右对齐百分比，下行=subtle 短格式 token 数） ——
+      // 模型用量行：环图 + 右侧模型列表。窄容器下必须换行——环图 200px 是 flex:none，
+      // 列表 flex:1 可压缩到 0，容器不够宽时列表会被压扁挤出可视区（只余色点露在外面）。
+      // 用容器查询（而非媒体查询）判定：判据是**本卡片实际宽度**，与窗口/侧栏无关。
+      ".dus-donutCard{container-type:inline-size}",
+      ".dus-donutRow{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:24px}",
+      ".dus-donutBox{position:relative;flex:none}",
+      ".dus-donutCenter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}",
+      // 环图中心总量：与界面同款无衬线体（不用等宽——中文「亿」配等宽字形很怪，
+      // 与 ZCode 的观感一致），tabular-nums 只让数字等宽对齐
+      ".dus-donutT{font-size:19px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}",
+      ".dus-donutU{font-size:12px;color:var(--dus-fgsubtle);margin-top:2px}",
+      ".dus-mlist{flex:1 1 260px;min-width:0}",
+      // 卡片窄于「环图 200 + 间距 24 + 列表基准 260」时：环图居中、列表整行落到下方
+      "@container (max-width: 484px){.dus-donutRow{gap:16px}.dus-donutBox{align-self:center}.dus-mlist{flex:1 1 100%}}",
+      ".dus-mrow{padding:9px 2px;border-bottom:1px solid var(--dus-border);min-width:0}",
+      ".dus-mrow:last-child{border-bottom:0}",
+      ".dus-mrowTop{display:flex;align-items:center;gap:10px;min-width:0}",
+      ".dus-msw{width:8px;height:8px;border-radius:50%;flex:none}",
+      ".dus-mnm{font-size:13px;color:var(--dus-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".dus-mpc{color:var(--dus-fgsubtle);margin-left:auto;flex:none;font-size:13px;font-variant-numeric:tabular-nums}",
+      ".dus-mrowSub{margin:3px 0 0 18px;font-size:12.5px;color:var(--dus-fgsubtle)}",
+      // —— 页脚刷新 + 三态 + 分块降级行 ——
+      ".dus-footRow{display:flex;justify-content:flex-end}",
+      ".dus-btnOutline{display:inline-flex;align-items:center;gap:7px;background:transparent;color:var(--dus-fgsubtle);border:1px solid var(--dus-border);border-radius:8px;padding:6px 12px;font-family:inherit;font-size:12.5px;cursor:pointer}",
+      ".dus-btnOutline:hover:not(:disabled){color:var(--dus-fg)}",
+      ".dus-btnOutline:disabled{opacity:.55;cursor:default}",
+      ".dus-stateBox{padding:40px 16px;text-align:center;color:var(--dus-fgsubtle);font-size:13px;line-height:1.6}",
+      ".dus-stateTitle{color:var(--dus-fg);font-size:15px;font-weight:500;margin-bottom:6px}",
+      ".dus-stateBtn{margin-top:12px}",
+      ".dus-errLine{color:var(--dus-fgsubtle);font-size:12px;padding:2px 2px}",
+      ".dus-hintLine{color:var(--dus-fgsubtle);font-size:12.5px;padding:2px 2px}",
+      // 降级行 + 行内重试（v0.2.0 §6）：不再让用户去找「右下」那个常在视口外的按钮
+      ".dus-degrade{display:flex;align-items:center;gap:10px;padding:2px 0}",
+      ".dus-degradeBtn{padding:2px 10px;font-size:12px}",
+      // 「更新于 HH:MM」：页脚按钮行左端（marginRight:auto 与右按钮组对拉开）
+      ".dus-updatedAt{color:var(--dus-fgsubtle);font-size:12px;margin-right:auto;align-self:center;font-variant-numeric:tabular-nums}",
+    ].join("");
+    const tagId = "@bluechonk/dsh-usage-stats/page.css";
+    if (typeof document !== "undefined") {
+      const existing = document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]");
+      if (existing === null) {
+        const tag = document.createElement("style");
+        tag.dataset.plugin = "@bluechonk/dsh-usage-stats";
+        tag.dataset.pluginCss = tagId;
+        tag.textContent = css;
+        document.head.appendChild(tag);
+      } else if (existing.textContent !== css) {
+        existing.textContent = css; // 热重载换了样式：原位替换，不留旧标签
+      }
+    }
+    //#endregion
+
+    /** 极简 children 透传的 jsx 工厂，省得逐处手写 children 数组。 */
+    function el(type, props) {
+      const all = Array.prototype.slice.call(arguments, 2);
+      const p = props === null || props === undefined ? {} : Object.assign({}, props);
+      if (all.length === 1) p.children = all[0];
+      else if (all.length > 1) p.children = all;
+      return react_jsx_runtime.jsx(type, p);
+    }
+
+    function describeError(error) {
+      if (error === null || error === undefined) return "unknown error";
+      return error && typeof error.message === "string" && error.message !== "" ? error.message : String(error);
+    }
+
+    //#region API（SPEC §5 四条 GET；同源相对路径，webServer 反代同源）
+    const API_PREFIX = "/api/dsh-usage-stats";
+    /** 统一 GET：网络失败/非 2xx/坏响应体都抛带文案的 Error；调用方全走 allSettled。
+     *  错误消息是**诊断信息**（进 console 与错误对象），按规范保持英文，不进界面字典。 */
+    async function requestJson(path) {
+      let res;
+      try {
+        res = await fetch(API_PREFIX + path, { cache: "no-store" });
+      } catch (error) {
+        throw new Error("network unreachable: " + describeError(error));
+      }
+      if (!res.ok) {
+        let text = "HTTP " + res.status;
+        try {
+          const data = await res.json();
+          if (data !== null && typeof data === "object" && typeof data.error === "string" && data.error !== "") text = data.error;
+        } catch {
+          // 响应体不是 JSON：沿用状态码
+        }
+        throw new Error(text);
+      }
+      try {
+        return await res.json();
+      } catch (error) {
+        throw new Error("failed to parse response: " + describeError(error));
+      }
+    }
+    // 服务端 409/503 是英文原文（SPEC路由文案），用户直视不友好——已知码位映射为界面文案。
+    // 映射结果属**界面文案**，走字典（t 缺省时是中文兜底）。
+    function backfillErrorText(error, t) {
+      const raw = describeError(error);
+      if (/already running/i.test(raw)) return tr(t, "backfillAlreadyRunning");
+      if (/read-only mirror/i.test(raw)) return tr(t, "backfillMirror");
+      return raw;
+    }
+    // 热力图 52 周窗口最多回看 364 天，366（SPEC默认）够覆盖；显式传参防默认漂移。
+    const api = {
+      summary: () => requestJson("/summary"),
+      heatmap: () => requestJson("/heatmap?days=366"),
+      trend: (days) => requestJson("/trend?days=" + days),
+      // 模型用量恒取全期口径（days=0）：环图统计全部用量，不随「近 7 日 / 近 30 日」变化
+      models: () => requestJson("/models?days=0"),
+      // 回填进度：{running,startedAt,scanned,total,backfilled,records,lostFrames,finishedAt}
+      // 回填由宿主装载时自动触发，面板只读进度，不提供手动触发入口。
+      backfillStatus: () => requestJson("/backfill/status"),
+    };
+    //#endregion
+
+    //#region 纯函数（格式化 / 日期 / 热力图 / 曲线 / 环形归并——导出面供直测）
+    const DAY_MS = 86400000;
+
+    /** 摘要条/环形中心短格式：≥1e8「x.x 亿」、≥1e4「x.x 万」，去尾 .0。
+     *  万档按**缩放后的完整值**再分档：99,999,999 的万档 toFixed(1) 会进位成
+     *  「10000.0 万」，改走亿档显示「1 亿」，不再出现「10000 万」。
+     *  单位走字典：中文「万/亿」，英文「K/B」。t 缺省时用中文兜底。 */
+    function fmtCompact(n, tight, t) {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v <= 0) return "0";
+      // tight=图表内口径（ZCode：「25.5亿」无空格）；摘要条实证带空格，两档分开
+      const gap = tight === true ? "" : " ";
+      if (v >= 1e8) return (v / 1e8).toFixed(1).replace(/\.0$/, "") + gap + tr(t, "fmtYi");
+      if (v >= 1e4) {
+        const wan = (v / 1e4).toFixed(1);
+        if (Number(wan) >= 1e4) return Number((v / 1e8).toFixed(1)) + gap + tr(t, "fmtYi");
+        return wan.replace(/\.0$/, "") + gap + tr(t, "fmtWan");
+      }
+      return String(Math.round(v));
+    }
+    /** 完整千分位：只用于元素的 title 悬停说明（精确值），页面正文一律用 fmtCompact 简写。 */
+    function fmtFull(n) {
+      const v = Math.round(Number(n) || 0);
+      return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+    /** 时长：「x 天」≥1 天；否则「x 小时 y 分」；不满 1 小时「y 分钟」。走字典，t 缺省用中文。 */
+    function fmtDuration(ms, t) {
+      const v = Number(ms);
+      if (!Number.isFinite(v) || v <= 0) return tr(t, "fmtMinutes", { minutes: 0 });
+      const d = Math.floor(v / DAY_MS);
+      if (d >= 1) return tr(t, "fmtDays", { count: d });
+      const h = Math.floor(v / 3600000);
+      const m = Math.floor((v % 3600000) / 60000);
+      if (h >= 1) return tr(t, "fmtHoursMinutes", { hours: h, minutes: m });
+      return tr(t, "fmtMinutes", { minutes: m });
+    }
+    function fmtStreak(n, t) {
+      return tr(t, "fmtDays", { count: Number(n) || 0 });
+    }
+    /** 「更新于 HH:MM」时钟（24 小时制）。不进 __pure：导出面由 client.test 快照锁定。 */
+    function fmtClock(d) {
+      return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    function dateKey(d) {
+      return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+    function parseDateKey(s) {
+      if (typeof s !== "string") return null;
+      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+      return m === null ? null : new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+    // 走 setDate 而非 ms 加减：跨 DST 时区也不漂移（宿主可能在任意时区）。
+    function addDays(d, n) {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      x.setDate(x.getDate() + n);
+      return x;
+    }
+    function fmtDayCn(d, t) {
+      return tr(t, "fmtMonthDay", { month: d.getMonth() + 1, day: d.getDate() });
+    }
+    function fmtFullDayCn(d, t) {
+      return tr(t, "fmtFullDate", { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
+    }
+
+    /** 热力五档强度：0 档为零值；其余 ceil(v/max*4) 钳到 [1,4]。 */
+    function hmLevel(v, max) {
+      if (!(v > 0) || !(max > 0)) return 0;
+      return Math.min(4, Math.max(1, Math.ceil((v / max) * 4)));
+    }
+
+    /** 当年自然周列（周日起始；1/1 与 12/31 所在周整周铺满，周内跨年的日子标记为年外格）。
+     *  口径是「1–12 月」而不是滚动 52 周：左端恒为 1 月、右端恒为 12 月，月份位置不随当天漂移。
+     *  days=API 逐日数组，缺失日期按 0。 */
+    function hmColumnsOf(days) {
+      const byDate = new Map();
+      for (const rec of (Array.isArray(days) ? days : [])) {
+        if (rec === null || typeof rec !== "object" || typeof rec.date !== "string") continue;
+        byDate.set(rec.date, { tokens: Number(rec.tokens) || 0, turns: Number(rec.turns) || 0 });
+      }
+      const now = new Date();
+      const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const year = today0.getFullYear();
+      const jan1 = new Date(year, 0, 1);
+      const dec31 = new Date(year, 11, 31);
+      const start = addDays(jan1, -jan1.getDay());        // 含 1/1 那周的周日
+      const lastSunday = addDays(dec31, -dec31.getDay()); // 含 12/31 那周的周日
+      // 周数按整周取整：跨 DST 的 ms 差会偏 ±1h，直接除会算成 52.99 周而丢一列
+      const weeks = Math.round((lastSunday.getTime() - start.getTime()) / (7 * DAY_MS)) + 1;
+      const cols = [];
+      for (let w = 0; w < weeks; w++) {
+        const col = [];
+        for (let k = 0; k < 7; k++) {
+          const d = addDays(start, w * 7 + k);
+          const inYear = d.getFullYear() === year;
+          const rec = inYear ? byDate.get(dateKey(d)) : undefined; // 年外日不参与统计
+          col.push({
+            date: d,
+            inYear,
+            future: inYear && d.getTime() > today0.getTime(),
+            rec: rec !== undefined,
+            tokens: rec ? rec.tokens : 0,
+            turns: rec ? rec.turns : 0,
+          });
+        }
+        cols.push(col);
+      }
+      return cols;
+    }
+
+    /** 月份标签：与列同宽的 span 网格行；锚点=周内首个 1 号 > 首个有记录日 > 首个当年日；
+     *  相邻同月并 span，整周年外的列并进上一段以保持 span 总和=列数。 */
+    function hmMonthLabelsOf(cols, t) {
+      const labels = [];
+      for (const col of cols) {
+        // 年外日不当锚点：12/31 之后那一周会把「明年 1 月」写进今年
+        const days = col.filter((c) => c.inYear !== false);
+        if (days.length === 0) {
+          const last = labels[labels.length - 1];
+          if (last !== undefined) last.span += 1;
+          else labels.push({ key: "", label: "", span: 1 });
+          continue;
+        }
+        const anchor = days.find((c) => dateKey(c.date).endsWith("-01")) || days.find((c) => c.rec) || days[0];
+        const mk = dateKey(anchor.date).slice(0, 7);
+        const last = labels[labels.length - 1];
+        if (last && last.key === mk) last.span += 1;
+        else labels.push({ key: mk, label: tr(t, "fmtMonth", { month: Number(mk.slice(5, 7)) }), span: 1 });
+      }
+      return labels;
+    }
+
+    /** 聚合列 tooltip 的日子锚点：列内最后一个「已到」的当年日。
+     *  当周/当年最后一列的第 7 格往往还没到，直接取 col[6] 会让 tooltip 报出未来日期。 */
+    function hmColEndOf(col) {
+      const arrived = col.filter((c) => c.inYear !== false && c.future !== true);
+      if (arrived.length > 0) return arrived[arrived.length - 1].date;
+      const days = col.filter((c) => c.inYear !== false);
+      return (days.length > 0 ? days[days.length - 1] : col[col.length - 1]).date;
+    }
+
+    /** 格状态：out=年外格不画（只占位）；future=未到的日子走虚线；past=按色阶填。
+     *  是否「未到」由调用方判定：每日档逐格判，聚合档按整列判——周内半未来的格子仍属于本周柱子，
+     *  逐格虚线会把柱子打碎成脏数据。 */
+    function hmCellStateOf(cell, future) {
+      if (cell.inYear === false) return "out";
+      return future ? "future" : "past";
+    }
+
+    /** 热力图渲染定义：每日=逐日格 tooltip；每周/累计=列底对齐色块柱
+     *  filledRows=ceil(v/max×7)（钳 [1,7]）+ 整列 tooltip（列末当年日 + 周合计/累计）。 */
+    function hmRenderOf(cols, mode, t) {
+      let dayMax = 0;
+      for (const col of cols) for (const c of col) if (c.tokens > dayMax) dayMax = c.tokens;
+      const weekVals = cols.map((col) => col.reduce((a, c) => a + c.tokens, 0));
+      const weekTurns = cols.map((col) => col.reduce((a, c) => a + c.turns, 0));
+      const cumVals = [];
+      const cumTurns = [];
+      let acc = 0;
+      let accT = 0;
+      for (let i = 0; i < weekVals.length; i++) {
+        acc += weekVals[i];
+        accT += weekTurns[i];
+        cumVals.push(acc);
+        cumTurns.push(accT);
+      }
+      const isWeekly = mode === "weekly";
+      const isTotal = mode === "total";
+      const colVals = isWeekly ? weekVals : isTotal ? cumVals : null;
+      const colMax = isWeekly ? Math.max(0, ...weekVals) : isTotal ? (cumVals[cumVals.length - 1] || 0) : 0;
+      return cols.map((col, w) => {
+        // 年外格不投票：跨年尾列只要当年日全在未来，整列就是「未到」
+        const colFuture = col.filter((c) => c.inYear !== false).every((c) => c.future === true);
+        let colTitle = "";
+        let defs;
+        if (isWeekly || isTotal) {
+          const val = colVals[w];
+          const turns = isTotal ? cumTurns[w] : weekTurns[w]; // 累计档配累计轮数：两个数口径必须一致
+          const filled = val <= 0 || colMax <= 0 ? 0 : Math.min(7, Math.max(1, Math.ceil((val / colMax) * 7)));
+          const lvl = hmLevel(val, colMax);
+          colTitle = colFuture ? "" : fmtFullDayCn(hmColEndOf(col), t) + "\n" + fmtCompact(val, true, t) + " tokens · " + tr(t, "fmtTurns", { count: turns });
+          defs = col.map((c, i) => {
+            const st = hmCellStateOf(c, colFuture);
+            const filledRow = i >= 7 - filled && val > 0;
+            return { state: st, lvl: st === "past" ? lvl : 0, has: st === "past" && filledRow, title: "" };
+          });
+        } else {
+          defs = col.map((c) => {
+            const st = hmCellStateOf(c, c.future === true);
+            return {
+              state: st,
+              lvl: st === "past" ? hmLevel(c.tokens, dayMax) : 0,
+              has: st === "past" && c.tokens > 0,
+              title: c.rec ? fmtFullDayCn(c.date, t) + "\n" + fmtCompact(c.tokens, true, t) + " tokens · " + tr(t, "fmtTurns", { count: c.turns }) : "",
+            };
+          });
+        }
+        return { title: colTitle, cells: defs };
+      });
+    }
+
+    /** 单调三次插值（Fritsch–Carlson，切线幅值限 3× 相邻段斜率）：平滑且绝不过冲。
+     *  注：d3-shape 实际用 Steffen 公式，视觉等价但算法不同——此处非「d3 原版」，勿写错口径。不引 d3。 */
+    function monotonePath(pts) {
+      const n = pts.length;
+      if (n < 2) return "";
+      if (n === 2) return "M" + pts[0][0] + "," + pts[0][1] + " L" + pts[1][0] + "," + pts[1][1];
+      const dx = [];
+      const s = [];
+      const m = [];
+      for (let i = 0; i < n - 1; i++) {
+        dx[i] = pts[i + 1][0] - pts[i][0];
+        // 重复横坐标（dx<=0）会让斜率变成 ±Infinity，后续 Infinity*0 = NaN 污染整条路径。
+        // 置 s=0（该段视作平段）而不是去改 dx：严格递增的数据永不进这条分支，输出逐字不变。
+        s[i] = dx[i] > 0 ? (pts[i + 1][1] - pts[i][1]) / dx[i] : 0;
+      }
+      m[0] = s[0];
+      m[n - 1] = s[n - 2];
+      for (let i = 1; i < n - 1; i++) {
+        if (s[i - 1] * s[i] <= 0) { m[i] = 0; continue; }
+        m[i] = (s[i - 1] + s[i]) / 2;
+        if (Math.abs(m[i]) > 3 * Math.abs(s[i - 1])) m[i] = 3 * s[i - 1];
+        if (Math.abs(m[i]) > 3 * Math.abs(s[i])) m[i] = 3 * s[i];
+      }
+      for (let i = 0; i < n - 1; i++) {
+        if (s[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+        if (Math.abs(m[i]) > 3 * Math.abs(s[i])) m[i] = 3 * s[i];
+        if (Math.abs(m[i + 1]) > 3 * Math.abs(s[i])) m[i + 1] = 3 * s[i];
+      }
+      let d = "M" + pts[0][0] + "," + pts[0][1];
+      for (let i = 0; i < n - 1; i++) {
+        d += "C" + (pts[i][0] + dx[i] / 3).toFixed(1) + "," + (pts[i][1] + m[i] * dx[i] / 3).toFixed(1)
+          + " " + (pts[i + 1][0] - dx[i] / 3).toFixed(1) + "," + (pts[i + 1][1] - m[i + 1] * dx[i] / 3).toFixed(1)
+          + " " + pts[i + 1][0].toFixed(1) + "," + pts[i + 1][1].toFixed(1);
+      }
+      return d;
+    }
+
+    /** 色板取色：6 色循环（--dus-c1..--dus-c6）。 */
+    function paletteVar(i) {
+      return "var(--dus-c" + (((i % 6) + 6) % 6 + 1) + ")";
+    }
+
+    /** 单模型值读取（byModel 缺键/坏值按 0；负值按 0 处理）。
+     *  负值来自「add 落在前一天、replace 落在后一天（跨午夜）」的归日错配：
+     *  真源与 daily 保持真实累加（负差值自然抵消是 SPEC §2 的对账基础），
+     *  但图表不能画负值——负 Y 会冲出视箱、负占比会被正数过滤剔除。展示层在此挡住。 */
+    function modelValueOf(point, key) {
+      const bm = point !== null && typeof point === "object" && point.byModel !== null && typeof point.byModel === "object"
+        ? point.byModel : {};
+      const v = Number(bm[key]);
+      if (!Number.isFinite(v)) return 0;
+      return v > 0 ? v : 0;
+    }
+
+    /** 趋势图 Y 轴刻度模式。
+     *
+     *  线性轴在量级悬殊时会让小模型彻底消失：单模型峰值 27.5 亿时，33.5 万的小模型
+     *  高度只剩 0.12%，全部贴在 0 轴上——图例列了 7 个模型、图上却只看得到 1 条线。
+     *  这与「同一张图里的模型都要可辨」直接冲突。
+     *
+     *  判据：峰值与「最小非零值」之比超过 50 倍即改用对数轴（用 log1p 软化，
+     *  0 值仍映射到底部，不会产生 -Infinity）。量级接近时仍用线性轴——线性更好读。
+     *
+     *  @param mx 峰值（单模型单点最大值）
+     *  @param mn 最小非零值
+     */
+    function trendScaleOf(mx, mn) {
+      const top = Number(mx);
+      const low = Number(mn);
+      if (!(top > 0) || !(low > 0) || !(top / low > 50)) {
+        // 线性：四条等距参考线（1/4、1/2、3/4、满量程）
+        return { log: false, s: 0, ticks: [0.25, 0.5, 0.75, 1].map((r) => r * top) };
+      }
+      // 对数：软化因子取「最小非零值」——log1p(1)=0.693 保证最小的模型也有
+      // 约 0.693/log1p(峰值/最小) 的高度（8200 倍量级时约 8%），不会贴底看不见。
+      const s = Math.max(1, low);
+      const cand = [];
+      const e = Math.floor(Math.log10(top));
+      for (let k = e; k >= e - 3; k -= 1) {
+        for (const m of [1, 2, 5]) {
+          const v = m * Math.pow(10, k);
+          if (v <= top && v >= s) cand.push(v);
+        }
+      }
+      cand.sort((a, b) => a - b);
+      // 刻度数封顶：240px 高的图放 12 个标签会挤成一团（相邻 20px，字高 10px）
+      const MAX_TICKS = 5;
+      let ticks = cand;
+      if (cand.length > MAX_TICKS) {
+        const picked = [];
+        const step = (cand.length - 1) / (MAX_TICKS - 1);
+        for (let i = 0; i < MAX_TICKS; i += 1) picked.push(cand[Math.round(i * step)]);
+        ticks = [...new Set(picked)].sort((a, b) => a - b);
+      }
+      return { log: true, s, ticks };
+    }
+
+    /** 趋势图 Y 值归一化：返回 0（底）~1（顶）。log 为真时用 log1p 软化的对数映射。 */
+    function trendYNorm(v, mx, s, log) {
+      const value = Number(v);
+      if (!(value > 0) || !(mx > 0)) return 0;
+      if (!log) return Math.min(1, value / mx);
+      const top = Math.log1p(mx / s);
+      if (!(top > 0)) return 0;
+      return Math.min(1, Math.log1p(value / s) / top);
+    }
+
+    /** 趋势图取数上限：只画全期用量最高的 6 个模型（与环形图同口径），
+     *  否则图例会铺成十几行、折线颜色还要循环复用，图既读不动也分不清。 */
+    const TREND_MODEL_LIMIT = 6;
+    /** 卡片里「没画线的模型」最多列几行：列太多会把卡片撑到一屏高，其余折成一句计数。 */
+    const TREND_HIDDEN_LIMIT = 3;
+
+    /** 趋势图模型清单：并集键按总量降序（返回全部模型；画图时由组件截前 6）。 */
+    function trendModelRowsOf(points) {
+
+      const sums = new Map();
+      for (const p of (Array.isArray(points) ? points : [])) {
+        const bm = p !== null && typeof p === "object" && p.byModel !== null && typeof p.byModel === "object" ? p.byModel : {};
+        for (const key of Object.keys(bm)) {
+          const v = Number(bm[key]);
+          if (!Number.isFinite(v)) continue;
+          sums.set(key, (sums.get(key) || 0) + v);
+        }
+      }
+      const list = Array.from(sums, ([key, total]) => ({ key, total }))
+        .filter((it) => it.total > 0)
+        .sort((a, b) => b.total - a.total);
+      return list.map((it, i) => ({ key: it.key, color: paletteVar(i) }));
+    }
+
+    /** 环形图数据：恒用 /models 的全期响应（模型用量统计全部用量，不随时间范围档位变化）。
+     *  >6 个模型归并「其他模型」（截断在 client，API 返回全量）。
+     *  归并行的显示名走字典（中文「其他模型」/ 英文「Other models」）。 */
+    function donutRowsOf(modelsResp, t) {
+      let list = null;
+      if (modelsResp !== null && Array.isArray(modelsResp.models)) {
+        list = modelsResp.models.map((m) => {
+          // 坏元素（null / 非对象）直接跳过：一处脏数据不能让整个面板炸掉
+          if (m === null || typeof m !== "object") return null;
+          const key = typeof m.key === "string" && m.key !== ""
+            ? m.key
+            : (m.provider !== undefined && m.model !== undefined ? m.provider + "/" + m.model : String(m));
+          return { key, tokens: Number(m.tokens) || 0 };
+        }).filter((it) => it !== null);
+      }
+      if (list === null) return null;
+      const positive = list
+        .map((it) => ({ key: it.key, tokens: Math.max(0, it.tokens) })) // replace 负增量残值不进图
+        .filter((it) => it.tokens > 0)
+        .sort((a, b) => b.tokens - a.tokens);
+      const total = positive.reduce((a, it) => a + it.tokens, 0);
+      const rows = positive.slice(0, 6).map((it, i) => ({ key: it.key, tokens: it.tokens, color: paletteVar(i) }));
+      // 归并行的被并入名单不再携带：右侧列表已不挂任何悬停文本，没有展示它的入口
+      const rest = positive.slice(6).reduce((a, it) => a + it.tokens, 0);
+      if (rest > 0) rows.push({ key: tr(t, "donutOtherModels"), tokens: rest, color: "var(--dus-fgfaint)" });
+      return { rows, total };
+    }
+
+    /** 环形扇区路径（pad 已由调用方扣进 a0/a1）。 */
+    function donutArcPath(cx, cy, rO, rI, a0, a1) {
+      const p = (r, a) => [cx + r * Math.cos((a * Math.PI) / 180), cy + r * Math.sin((a * Math.PI) / 180)];
+      const large = a1 - a0 > 180 ? 1 : 0;
+      const x0y0 = p(rO, a0);
+      const x1y1 = p(rO, a1);
+      const x2y2 = p(rI, a1);
+      const x3y3 = p(rI, a0);
+      const f = (n) => n.toFixed(2);
+      return "M" + f(x0y0[0]) + "," + f(x0y0[1])
+        + " A" + rO + "," + rO + " 0 " + large + " 1 " + f(x1y1[0]) + "," + f(x1y1[1])
+        + " L" + f(x2y2[0]) + "," + f(x2y2[1])
+        + " A" + rI + "," + rI + " 0 " + large + " 0 " + f(x3y3[0]) + "," + f(x3y3[1]) + " Z";
+    }
+    //#endregion
+
+    //#region v0.2.0 新增纯函数（SPEC §6；只放算术与转移表，副作用一律留在组件里）
+    /** 悬停卡片尺寸（SPEC §6）：定宽让定位数学可精确钳位；TIP_H 只用于纵向钳位的保守估计。 */
+    const TIP_W = 230;
+    const TIP_H = 120;
+    /** 卡片高度的保守估算（标题 + 每行 17px + 内衬），只给纵向钳位用；行数可变的趋势卡片用它。 */
+    const tipHeightOf = (rowCount) => 40 + 17 * Math.max(1, Math.floor(Number(rowCount) || 0));
+
+    /** phase 转移（§6）：full 拍（初始 load / 用户显式刷新）全权；静默拍**单调**——
+     *  ready 恒保持，非 ready 只允许升到 ready，其余一律 no-op。
+     *  目的：静默拍既能把「空态」拉出来（治 S4），又绝不会把有数据的面板打成空态/错误态。 */
+    function phaseAfterTick(prev, next, silent) {
+      if (silent !== true) return next;
+      if (prev === "ready") return "ready";
+      if (next === "ready") return "ready";
+      return prev;
+    }
+
+    /** 摘要条六格（§6）：值=短格式、标签、悬停 title（精确值 + 口径说明）。 */
+    function summaryCellsOf(summary, t) {
+      const s = summary !== null && typeof summary === "object" ? summary : {};
+      const total = Number(s.totalTokens) || 0;
+      const peakObj = s.peakDay !== null && typeof s.peakDay === "object" ? s.peakDay : null;
+      const peak = peakObj === null ? 0 : Number(peakObj.tokens) || 0;
+      const peakD = peakObj !== null && typeof peakObj.date === "string" ? parseDateKey(peakObj.date) : null;
+      const sinceD = typeof s.since === "string" && s.since !== "" ? parseDateKey(s.since) : null;
+      // 缓存命中率：后端给的是百分比数值；缺字段（老数据/镜像）时按「—」处理而不是 0%
+      const rateRaw = s.cacheHitRate === null || s.cacheHitRate === undefined ? null : Number(s.cacheHitRate);
+      const rate = rateRaw !== null && Number.isFinite(rateRaw) ? rateRaw : null;
+      const cacheRead = Number(s.cacheReadTokens) || 0;
+      const uncached = Number(s.uncachedInputTokens) || 0;
+      return [
+        { key: "total", value: fmtCompact(total, false, t), label: tr(t, "summaryTotalTokens"),
+          title: tr(t, "fmtCumulative", { value: fmtFull(total) + " Token" })
+            + (sinceD === null ? "" : tr(t, "fmtSince", { date: dateKey(sinceD) })) },
+        { key: "peak", value: fmtCompact(peak, false, t), label: tr(t, "summaryPeakTokens"),
+          title: peak > 0 && peakD !== null
+            ? tr(t, "fmtSingleDayPeak", { value: fmtFull(peak) + " Token", date: fmtDayCn(peakD, t) })
+            : tr(t, "fmtNoUsage") },
+        { key: "cache", value: rate === null ? "—" : rate.toFixed(1) + "%", label: tr(t, "summaryCacheHitRate"),
+          title: rate === null
+            ? tr(t, "summaryCacheHitRateEmpty")
+            : tr(t, "fmtCacheHit", { value: fmtFull(cacheRead) + " Token" })
+              + " / " + tr(t, "fmtInputTotal", { total: fmtFull(cacheRead + uncached) + " Token" }) },
+        { key: "longest", value: fmtDuration(s.longestChatMs, t), label: tr(t, "summaryLongestChat"),
+          title: tr(t, "summaryLongestChatHint") },
+        { key: "cur", value: fmtStreak(s.currentStreakDays, t), label: tr(t, "summaryCurrentStreak"),
+          title: tr(t, "summaryCurrentStreakHint") },
+        { key: "max", value: fmtStreak(s.longestStreakDays, t), label: tr(t, "summaryLongestStreak"),
+          title: tr(t, "summaryLongestStreakHint") },
+      ];
+    }
+
+    /** 悬停/游标卡片定位（§6）：锚点两侧择优 + 两轴钳位到容器内——任何 tipW/tipH 都不溢出。
+     *  卡片定宽（TIP_W）让数学精确；缺尺寸/坏输入一律按容器能容下处理，绝不产出 NaN。 */
+    function tipPlacementOf(anchorX, anchorY, containerW, containerH, tipW, tipH) {
+      const margin = 8;
+      const gap = 14;
+      const w = Number(tipW) > 0 ? Number(tipW) : TIP_W;
+      const h = Number(tipH) > 0 ? Number(tipH) : TIP_H;
+      const cw = Number(containerW) > 0 ? Number(containerW) : w + margin * 2;
+      const ch = Number(containerH) > 0 ? Number(containerH) : h + margin * 2;
+      const ax = Number.isFinite(Number(anchorX)) ? Number(anchorX) : 0;
+      const ay = Number.isFinite(Number(anchorY)) ? Number(anchorY) : 0;
+      let left = ax + gap;
+      if (left + w > cw - margin) left = ax - gap - w;
+      left = Math.min(Math.max(left, margin), Math.max(margin, cw - w - margin));
+      let top = ay - Math.round(h / 2);
+      top = Math.min(Math.max(top, margin), Math.max(margin, ch - h - margin));
+      return { left: Math.round(left), top: Math.round(top) };
+    }
+
+    /** 趋势卡片的数据行（§6）：0 用量模型行不进卡片（避免误导为有效用量）。
+     *  数值用万/亿简写——完整千分位在六位数以上读不出量级。 */
+    function tipRowsOf(point, modelRows, t) {
+      const rows = [];
+      for (const m of (Array.isArray(modelRows) ? modelRows : [])) {
+        const v = modelValueOf(point, m.key);
+        if (!(v > 0)) continue;
+        rows.push({ key: m.key, color: m.color, value: fmtCompact(v, true, t) });
+      }
+      return rows;
+    }
+
+    /** 悬停日「有量但没画线」的模型明细（逐日统计）。
+     *  只给一个数字是不够的：某天用量可能全来自未画出的模型，此时图上 6 条线全是 0，
+     *  卡片若只有一行「另有 N 个模型未列出」，这一天就成了没有任何行可解释的空卡。
+     *  按当天用量降序取前 limit 条出行，其余折成计数由调用方显示。 */
+    function hiddenModelRowsOf(point, shownRows, limit, t) {
+      const bm = point !== null && typeof point === "object" && point.byModel !== null && typeof point.byModel === "object"
+        ? point.byModel : {};
+      const shown = new Set((Array.isArray(shownRows) ? shownRows : []).map((r) => r.key));
+      const list = [];
+      for (const key of Object.keys(bm)) {
+        if (shown.has(key)) continue;
+        const v = modelValueOf(point, key);
+        if (v > 0) list.push({ key, v });
+      }
+      list.sort((a, b) => b.v - a.v || (a.key < b.key ? -1 : 1));
+      const cap = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : list.length;
+      return {
+        // color 留空：这几行不是图上的线，点用空心圈画（filled=线、hollow=不在图上）
+        rows: list.slice(0, cap).map((it) => ({ key: it.key, color: "", off: true, value: fmtCompact(it.v, true, t) })),
+        restCount: Math.max(0, list.length - cap),
+      };
+    }
+
+    /** 占比文案（§6）：≥10% 取整、<10% 一位小数（照 ZCode 界面口径）；零值/无效一律「0%」。 */
+    function pctTextOf(tokens, total) {
+      const t = Number(total);
+      const n = Number(tokens) || 0;
+      if (!(t > 0) || n <= 0) return "0%";
+      const v = (n / t) * 100;
+      return (v >= 10 ? String(Math.round(v)) : v.toFixed(1)) + "%";
+    }
+
+    /** 环形卡片文案行：token 简写 + 占比（无模型行——环形图没有一个「点」的 byModel）。 */
+    function donutTipTextOf(row, total, t) {
+      const tokens = Math.max(0, Number(row !== null && typeof row === "object" ? row.tokens : 0) || 0);
+      return fmtCompact(tokens, true, t) + " Token · " + pctTextOf(tokens, total);
+    }
+
+    /** 静默拍要不要补拉热力图（§6）：只在总量或「今天」变了才拉。
+     *  回应「历史日档每次请求都要同步读盘」的真实成本——空闲时零额外请求。 */
+    function needHeatmapRefreshOf(prev, next) {
+      if (prev === null || prev === undefined || next === null || next === undefined) return false;
+      return (Number(prev.totalTokens) || 0) !== (Number(next.totalTokens) || 0)
+        || (prev.today === undefined ? null : prev.today) !== (next.today === undefined ? null : next.today);
+    }
+
+    /** 键盘游标步进（§6）：← → 走 stride（热力图=一周 7 格）、↑ ↓ 走 1 格，Home/End 到两端。
+     *  非法键返回原游标；越界一律钳回 [0, len-1]。 */
+    function cursorStepOf(cursor, key, length, stride) {
+      const len = Math.max(0, Math.floor(Number(length) || 0));
+      if (len === 0) return 0;
+      const step = Math.max(1, Math.floor(Number(stride) || 1));
+      let cur = Math.floor(Number(cursor));
+      if (!Number.isFinite(cur)) cur = 0;
+      cur = Math.min(Math.max(cur, 0), len - 1);
+      let next = cur;
+      if (key === "ArrowLeft") next = cur - step;
+      else if (key === "ArrowRight") next = cur + step;
+      else if (key === "ArrowUp") next = cur - 1;
+      else if (key === "ArrowDown") next = cur + 1;
+      else if (key === "Home") next = 0;
+      else if (key === "End") next = len - 1;
+      else return cur;
+      return Math.min(Math.max(next, 0), len - 1);
+    }
+
+    /** 回填 UI 映射（§6）：纯展示映射——「要不要继续轮询 / 跑完要不要刷新」
+     *  这类副作用留在组件里，不进纯函数。回填由宿主自动触发，面板不提供手动按钮，
+     *  这里只产出空态/跟踪态文案。 */
+    function backfillUiOf(state, t) {
+      const s = state !== null && typeof state === "object" ? state : {};
+      const tracking = s.tracking === true;
+      const scannedRaw = Number(s.scanned);
+      const total = Math.floor(Number(s.total) || 0);
+      const hasProgress = Number.isFinite(scannedRaw) && total > 0;
+      const progress = tr(t, "backfillProgress", { scanned: Math.max(0, Math.round(scannedRaw)), total });
+      if (!tracking) {
+        return {
+          emptyTitle: tr(t, "stateEmpty"),
+          emptyDesc: tr(t, "stateEmptyDesc"),
+        };
+      }
+      return {
+        emptyTitle: tr(t, "backfillRunning"),
+        emptyDesc: hasProgress ? progress + tr(t, "backfillProgressSuffix") : tr(t, "backfillTakesMinutes"),
+      };
+    }
+    //#endregion
+
+    //#region API 响应形状哨兵（坏形状=显式按失败降级，不静默当空数据）
+    function validOf(key, value) {
+      if (value === null || typeof value !== "object") return false;
+      if (key === "summary") return Number.isFinite(Number(value.totalTokens));
+      if (key === "heatmap") return Array.isArray(value.days);
+      if (key === "trend") return Array.isArray(value.points);
+      if (key === "models") return Array.isArray(value.models);
+      return false;
+    }
+    //#endregion
+
+    //#region 通用小部件
+    /** 胶囊 Tab（h-7 rounded-full，激活项反色；样式见 .dus-pills/.dus-pill）。
+     *  选中态同时给语义（aria-pressed，SPEC §6）——只靠背景色的选中态读屏用户听不出来。 */
+    function Pills(props) {
+      return el("div", { className: "dus-pills" },
+        props.options.map((o) => el("button", {
+          key: String(o.value),
+          type: "button",
+          className: o.value === props.value ? "dus-pill dus-pillOn" : "dus-pill",
+          "aria-pressed": o.value === props.value,
+          onClick: () => props.onChange(o.value),
+        }, o.label)),
+      );
+    }
+
+    /** 三态盒（加载中… / 暂无使用数据 / 加载失败+重试）。 */
+    function StateBox(props) {
+      return el("div", { className: "dus-stateBox" },
+        props.title !== undefined ? el("div", { className: "dus-stateTitle" }, props.title) : null,
+        props.desc,
+        props.onRetry !== undefined ? el("div", { className: "dus-stateBtn" },
+          el("button", { type: "button", className: "dus-btnOutline", onClick: props.onRetry }, tr(props.t, "degradeRetry")),
+        ) : null,
+      );
+    }
+
+    /** 共用的悬停/游标卡片（§6）：热力图、趋势图、环形图同一张——
+     *  标题 + 纯文本行（lines）+ 模型行（rows，带色点与「tokens」单位）。 */
+    function TipCard(props) {
+      const rows = Array.isArray(props.rows) ? props.rows : [];
+      const lines = Array.isArray(props.lines) ? props.lines : [];
+      return el("div", { className: "dus-tip", style: { left: props.left + "px", top: props.top + "px" } },
+        props.title === null || props.title === undefined ? null : el("div", { className: "dus-tipH" }, props.title),
+        rows.map((r) => el("div", { key: r.key, className: r.off === true ? "dus-tipR dus-tipROff" : "dus-tipR" },
+          el("i", { className: "dus-dot", style: r.color === "" ? undefined : { background: r.color } }),
+          el("span", { className: "dus-tipN", title: r.key }, r.key),
+          el("span", { className: "dus-tipV" }, r.value),
+          el("span", { className: "dus-tipU" }, "tokens"),
+        )),
+        lines.map((text, i) => el("div", { key: "l" + i, className: "dus-tipL" }, text)),
+      );
+    }
+
+    /** 卡片级降级行（§6 配套 / §6）：文案 + 行内「重试」——
+     *  旧文案让人去点「右下刷新」，而那个按钮常在视口外且窄窗会换位。 */
+    function DegradeLine(props) {
+      return el("div", { className: "dus-degrade" },
+        el("span", { className: "dus-errLine" }, props.text),
+        el("button", { type: "button", className: "dus-btnOutline dus-degradeBtn", onClick: props.onRetry }, tr(props.t, "degradeRetry")),
+      );
+    }
+    //#endregion
+
+    //#region A1 六格摘要条（§6：格子带悬停说明——精确值 + 峰值日期 + 累计起点 + 口径）
+    function SummaryStrip(props) {
+      const cells = summaryCellsOf(props.summary, props.t);
+      return el("div", { className: "dus-strip" },
+        cells.map((c) => el("div", { key: c.key, className: "dus-cell", title: c.title },
+          el("div", { className: "dus-cellV" }, c.value),
+          el("div", { className: "dus-cellK" }, c.label))),
+      );
+    }
+    //#endregion
+
+    //#region A2 Token 活动热力图（每日/每周/累计三档；三档切换=ZCode 自带功能，必须保留）
+    // 档位标签走字典：中文「每日/每周/累计」，英文「Daily/Weekly/Total」。
+    const HM_MODES = [
+      { value: "daily", key: "heatmapModeDaily" },
+      { value: "weekly", key: "heatmapModeWeekly" },
+      { value: "total", key: "heatmapModeTotal" },
+    ];
+    // 图表键盘导航：只认这六个键，认到就接管（preventDefault + 落游标），其余键（含 Tab）一律放行。
+    const NAV_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+
+    /** 热力格类名：状态决定底样式（past=色块、future=虚线、out=不画），游标态叠加描边。 */
+    function hmCellClassOf(cd, isCursor) {
+      const base = "dus-hmCell"
+        + (cd.state === "out" ? " dus-hmCellOut" : cd.state === "future" ? " dus-hmCellFuture" : "")
+        + (cd.has ? " dus-hmCellUsed" : "");
+      return base + (isCursor ? " dus-hmCur" : "");
+    }
+
+    function HeatmapCard(props) {
+      const cols = react.useMemo(() => hmColumnsOf(props.days), [props.days]);
+      const render = react.useMemo(() => hmRenderOf(cols, props.mode, props.t), [cols, props.mode, props.t]);
+      const months = react.useMemo(() => hmMonthLabelsOf(cols, props.t), [cols, props.t]);
+      // 键盘游标默认落「今天」那格：当年布局下今天的位置随年份漂移，从列阵里查而不是算固定偏移，
+      // 否则第一下方向键会从 1 月起跳。找不到（异常数据）退回首格。
+      const todayFlat = react.useMemo(() => {
+        const key = dateKey(new Date());
+        const flat = cols.flat().findIndex((c) => dateKey(c.date) === key);
+        return flat < 0 ? 0 : flat;
+      }, [cols]);
+      const [hover, setHover] = react.useState(null);   // {flat,x,y,cw,ch}
+      // 键盘游标只存 flat 索引：像素锚点在渲染时现算，窗口缩放/跨天/换档后不会指向脏位置
+      const [cursor, setCursor] = react.useState(null);
+      const wrapRef = react.useRef(null);
+      // 「有用量的天数」从原始逐日数组算，与渲染档位解耦——每周/累计档的 has 是「柱里被填的格数」，
+      // 拿它当天数会读到 7 倍
+      const usedDays = react.useMemo(() => (Array.isArray(props.days) ? props.days : [])
+        .filter((d) => d !== null && typeof d === "object" && Number(d.tokens) > 0).length, [props.days]);
+      // 锚点一律从真实 DOM rect 取：1fr 等分下「按格子尺寸推算」会因 gap/取整漂移
+      const anchorOfFlat = (flat) => {
+        const wrap = wrapRef.current;
+        if (wrap === null) return null;
+        const node = wrap.querySelector('[data-hm="' + flat + '"]');
+        if (node === null) return null;
+        const cell = node.getBoundingClientRect();
+        const box = wrap.getBoundingClientRect();
+        return { flat, x: cell.left - box.left + cell.width / 2, y: cell.top - box.top + cell.height / 2, cw: box.width, ch: box.height };
+      };
+      const onCellEnter = (flat) => (e) => {
+        const wrap = wrapRef.current;
+        if (wrap === null) return;
+        const cell = e.currentTarget.getBoundingClientRect();
+        const box = wrap.getBoundingClientRect();
+        setHover({ flat, x: cell.left - box.left + cell.width / 2, y: cell.top - box.top + cell.height / 2, cw: box.width, ch: box.height });
+      };
+      const onKeyDown = (e) => {
+        if (NAV_KEYS.indexOf(e.key) === -1) return; // 其它键（含 Tab）放行
+        const base = cursor !== null ? cursor : hover !== null ? hover.flat : todayFlat;
+        const next = cursorStepOf(base, e.key, cols.length * 7, 7);
+        if (anchorOfFlat(next) === null) return; // 网格未渲染时不动
+        e.preventDefault();
+        setCursor(next);
+      };
+      const shown = cursor !== null ? anchorOfFlat(cursor) : hover;
+      let tipProps = null;
+      if (shown !== null) {
+        const w = Math.floor(shown.flat / 7);
+        const k = shown.flat % 7;
+        const colDef = render[w];
+        if (colDef !== undefined && colDef.cells[k] !== undefined) {
+          // 每周/累计档整列一条 tooltip（colDef.title）；每日档逐格（cell.title，缺勤日为空=不弹）
+          const text = colDef.title !== "" ? colDef.title : colDef.cells[k].title;          if (text !== "") {
+            const parts = text.split("\n");
+            // 高度按实际行数估算（标题 + 1 行）：用常量 TIP_H=120 会让卡片整体偏高 50~90px，
+            // 出现「卡片飘在别处」的错位感
+            const pos = tipPlacementOf(shown.x, shown.y, shown.cw, shown.ch, TIP_W, tipHeightOf(1));
+            tipProps = { left: pos.left, top: pos.top, title: parts[0], lines: parts.slice(1) };
+          }
+        }
+      }
+      return el("div", { className: "dus-card dus-cardTight" },
+        el("div", { className: "dus-secHead" },
+          el("div", { className: "dus-secTitle" }, tr(props.t, "heatmapTitle")),
+          el(Pills, {
+            options: HM_MODES.map((m) => ({ value: m.value, label: tr(props.t, m.key) })),
+            value: props.mode,
+            onChange: props.onMode,
+          }),
+        ),
+        // 有数据但本轮更新失败：显式说明显示的是旧值（§6 按需刷新的残留面）
+        props.stale === true
+          ? el("div", { className: "dus-degrade", style: { marginBottom: 8 } },
+            el("span", { className: "dus-errLine" }, tr(props.t, "degradeHeatmapStale")),
+            el("button", { type: "button", className: "dus-btnOutline dus-degradeBtn", onClick: props.onRetry }, tr(props.t, "degradeRetry")))
+          : null,
+        el("div", {
+          className: "dus-hmWrap",
+          ref: wrapRef,
+          tabIndex: 0,
+          role: "img",
+          "aria-label": tr(props.t, "heatmapAriaLabel", { year: new Date().getFullYear(), days: usedDays }),
+          onKeyDown,
+          onBlur: () => setCursor(null),
+          onMouseLeave: () => setHover(null),
+        },
+          el("div", { className: "dus-hmGrid", style: { gridTemplateColumns: "repeat(" + cols.length + ",minmax(0,1fr))" } },
+            render.map((colDef, w) => el("div", { key: w, className: "dus-hmCol" },
+              colDef.cells.map((cd, k) => el("i", {
+                key: k,
+                "data-hm": w * 7 + k,
+                className: hmCellClassOf(cd, cursor !== null && cursor === w * 7 + k),
+                // 背景只给「已过/今天」的格子：未来格走 CSS 虚线，年外格不画
+                style: cd.state === "past" ? { background: "var(--dus-hm" + cd.lvl + ")" } : undefined,
+                onMouseEnter: cd.state === "past" ? onCellEnter(w * 7 + k) : undefined,
+              })),
+            )),
+          ),
+          el("div", { className: "dus-hmMonths", style: { gridTemplateColumns: "repeat(" + cols.length + ",minmax(0,1fr))" } },
+            months.map((l, i) => el("span", {
+              key: i,
+              className: i === months.length - 1 ? "dus-hmMonthEnd" : undefined,
+              style: { gridColumn: "span " + l.span },
+            }, l.label)),
+          ),
+          tipProps === null ? null : el(TipCard, tipProps),
+        ),
+      );
+    }
+    //#endregion
+
+    //#region A4 每日 Token 趋势折线（手写 monotone；Y 域=[0,单模型单日峰值]）
+    // 视箱与边距：margin {top:8,right:24,left:24,bottom:26}（首尾日期文本安全区）。
+    const TREND_W = 828;
+    const TREND_H = 240;
+    const TREND_L = 24; // 左侧留白（不画 Y 轴刻度标签，与 ZCode 一致）
+    const TREND_R = 24;
+    const TREND_T = 8;
+    const TREND_B = 26;
+
+    function TrendCard(props) {
+      const trend = props.trend;
+      // granularity="hour" 只在 /trend?days=1 时出现；UI 已移除「今日」档，
+      // 客户端只请求 days=7|30，故此分支当前不可达——保留为防御（接口契约未变时无害）。
+      const granularity = trend !== null && trend.granularity === "hour" ? "hour" : "day";
+      const points = trend !== null && Array.isArray(trend.points) ? trend.points : [];
+      const allModelRows = react.useMemo(() => trendModelRowsOf(points), [trend]);
+      // 只看用量最高的前 6 个模型：图例、折线、悬停行共用这份清单，避免图例与实际线不一致
+      const modelRows = allModelRows.slice(0, TREND_MODEL_LIMIT);
+      const [hover, setHover] = react.useState(null);         // {idx,x,y,cw,ch}
+      const [cursor, setCursor] = react.useState(null);       // 键盘游标=点索引（锚点渲染时现算）
+      const wrapRef = react.useRef(null);
+      const n = points.length;
+      const span = Math.max(1, n - 1);
+      // Y 域 [0, 单模型单日峰值]——独立折线不是堆叠图，不能拿日总量当域。
+      // 量级悬殊时改用对数轴（§6.14），否则小模型会被压到 0 轴上看不见。
+      let mx = 1;
+      let mn = Infinity;
+      for (const p of points) {
+        for (const row of modelRows) {
+          const v = modelValueOf(p, row.key);
+          if (v > mx) mx = v;
+          if (v > 0 && v < mn) mn = v;
+        }
+      }
+      if (!Number.isFinite(mn)) mn = mx;
+      const scale = trendScaleOf(mx, mn);
+      // SVG 按容器实际宽度 1:1 渲染（viewBox 宽度 = 实测宽度）：
+      // 固定 viewBox + width:100% 会让窄容器把整幅图等比缩小，X 轴日期文字跟着缩到
+      // 5~6px 又小又糊（ZCode 用 HTML 文本渲染日期，不参与缩放，故始终清晰）。
+      const [vbW, setVbW] = react.useState(TREND_W);
+      react.useEffect(() => {
+        const el = wrapRef.current;
+        if (el === null || typeof ResizeObserver === "undefined") return undefined;
+        const measure = () => setVbW(Math.max(320, Math.round(el.clientWidth)));
+        measure();
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        return () => ro.disconnect();
+      }, []);
+      const X = (i) => TREND_L + (i * (vbW - TREND_L - TREND_R)) / span;
+      const Y = (v) => TREND_T + (1 - trendYNorm(v, mx, scale.s, scale.log)) * (TREND_H - TREND_T - TREND_B);
+      // 图例为纯展示（无隐藏/恢复交互），可见行 = 截断后的前 6 个模型行，
+      // 图例、折线、悬停行都读这份别名，三者永远一致。
+      // 保留这个别名而不是直接写 modelRows：它是多处引用的锚点——
+      // 改名/删名一旦漏改引用，整页会在真机降级为兜底横幅（单元测试覆盖不到）。
+      const visibleRows = modelRows;
+      const anchorOfIdx = (idx) => {
+        const wrap = wrapRef.current;
+        if (wrap === null) return null;
+        const box = wrap.getBoundingClientRect();
+        let py = TREND_H / 2;
+        for (const m of visibleRows) {
+          const v = modelValueOf(points[idx], m.key);
+          if (v > 0) { py = (Y(v) * box.height) / TREND_H; break; }
+        }
+        return { idx, x: (X(idx) * box.width) / vbW, y: py, cw: box.width, ch: box.height };
+      };
+      const handleMove = (e) => {
+        const wrap = wrapRef.current;
+        if (wrap === null || n === 0) return;
+        const box = wrap.getBoundingClientRect();
+        const vx = ((e.clientX - box.left) * vbW) / box.width;
+        let idx = Math.round((vx - TREND_L) / ((vbW - TREND_L - TREND_R) / span));
+        idx = Math.max(0, Math.min(n - 1, idx));
+        const anchor = anchorOfIdx(idx);
+        if (anchor === null) return;
+        setHover({ ...anchor, x: e.clientX - box.left }); // 横向跟鼠标、纵向跟该点最高的一条可见线
+      };
+      const onKeyDown = (e) => {
+        if (NAV_KEYS.indexOf(e.key) === -1) return; // 其它键（含 Tab）放行
+        const base = cursor !== null ? cursor : hover !== null ? hover.idx : n - 1;
+        const next = cursorStepOf(base, e.key, n, 1);
+        if (anchorOfIdx(next) === null) return; // 图表未渲染时不动
+        e.preventDefault();
+        setCursor(next);
+      };
+
+      if (n === 0) {
+        return el("div", { className: "dus-card" },
+          el("div", { className: "dus-secTitle", style: { marginBottom: 12 } }, tr(props.t, "trendTitle")),
+          props.err === true
+            ? el(DegradeLine, { text: tr(props.t, "degradeTrend"), onRetry: props.onRetry, t: props.t })
+            : el("div", { className: "dus-hintLine" }, tr(props.t, "stateNoTrend")),
+        );
+      }
+
+      // X 轴日期标签：均匀取点 + 像素间距守卫。
+      // 「≤14 点全标」在窄容器里照样叠字（近 7 日的 7 个完整日期在 640px 内必叠），
+      // 所以点数少时也按可用宽度算间隔，并逐个校验与首/尾标签的像素间距。
+      const sameMonth = (() => {
+        const first = points.length > 0 ? parseDateKey(points[0].date) : null;
+        if (first === null) return false;
+        return points.every((p) => {
+          const d = parseDateKey(p.date);
+          return d !== null && d.getMonth() === first.getMonth() && d.getFullYear() === first.getFullYear();
+        });
+      })();
+      // 标签宽随格式而变：同月用「日」短格式（约 30px），跨月用完整日期（约 66px）
+      const LABEL_W = sameMonth ? 34 : 66;
+      const baseStep = n > 45 ? 7 : 5;
+      const usable = Math.max(1, vbW - TREND_L - TREND_R);
+      const pxPerIdx = usable / Math.max(1, n - 1);
+      // 首尾标签是 start/end 对齐（各多占半个标签宽），故间距要求 1.5 倍标签宽
+      const minGapPx = LABEL_W * 1.5;
+      const maxLabels = Math.max(2, Math.floor(usable / minGapPx) + 1);
+      // 点数少时（≤14）不强制每 5 个一标——像素间距够就多标几个，短格式下 7 个也放得下
+      const step = n <= 14
+        ? Math.max(1, Math.ceil((n - 1) / Math.max(1, maxLabels - 1)))
+        : Math.max(baseStep, Math.ceil((n - 1) / Math.max(1, maxLabels - 1)));
+      const showLbl = (i) => {
+        if (i === 0 || i === n - 1) return true;
+        if (i % step !== 0) return false;
+        return i * pxPerIdx >= minGapPx && (n - 1 - i) * pxPerIdx >= minGapPx;
+      };
+      const labelOf = (p) => {
+        if (granularity === "hour") return typeof p.label === "string" ? p.label : "";
+        const d = parseDateKey(p.date);
+        if (d === null) return String(p.date === undefined ? "" : p.date);
+        if (sameMonth) return tr(props.t, "fmtDayOnly", { day: d.getDate() });
+        return fmtDayCn(d, props.t);
+      };
+      const todayLabel = granularity === "hour" ? fmtDayCn(new Date(), props.t) : "";
+      const shown = cursor !== null ? anchorOfIdx(cursor) : hover;
+      const hoverPoint = shown !== null && points[shown.idx] !== undefined ? points[shown.idx] : null;
+      const tipTitle = (p) => {
+        const total = Number(p.total) || 0;
+        if (granularity === "hour") return todayLabel + " " + (typeof p.label === "string" ? p.label : "") + " - " + fmtCompact(total, true, props.t) + " tokens";
+        const d = parseDateKey(p.date);
+        return (d === null ? "" : fmtDayCn(d, props.t)) + " - " + fmtCompact(total, true, props.t) + " tokens";
+      };
+      // 卡片行＝图上的前 6 条线 + 当天有量但没画线的模型明细（空心圈）。
+      // 明细必须逐日统计、也必须出行：某天用量全来自未画出的模型时，图上 6 条线全是 0，
+      // 只给「另有 N 个」会让这一天变成没有任何行可解释的空卡。
+      const shownRows = hoverPoint === null ? [] : tipRowsOf(hoverPoint, visibleRows, props.t);
+      const hidden = hoverPoint === null
+        ? { rows: [], restCount: 0 }
+        : hiddenModelRowsOf(hoverPoint, visibleRows, TREND_HIDDEN_LIMIT, props.t);
+      let tipProps = null;
+      if (shown !== null && hoverPoint !== null) {
+        const rows = shownRows.concat(hidden.rows);
+        const lines = hidden.restCount > 0 ? [tr(props.t, "trendOtherModels", { count: hidden.restCount })] : [];
+        const pos = tipPlacementOf(shown.x, shown.y, shown.cw, shown.ch, TIP_W, tipHeightOf(rows.length + lines.length));
+        tipProps = { left: pos.left, top: pos.top, title: tipTitle(hoverPoint), rows, lines };
+      }
+      const rangeLabel = typeof props.rangeLabel === "string" ? props.rangeLabel : "";
+      const wrapProps = {
+        className: "dus-chartWrap",
+        ref: wrapRef,
+        tabIndex: 0,
+        role: "img",
+        "aria-label": tr(props.t, "trendAriaLabel", { range: rangeLabel, count: n }),
+        onMouseMove: handleMove,
+        onMouseLeave: () => setHover(null),
+        onKeyDown,
+        onBlur: () => setCursor(null),
+      };
+
+      return el("div", { className: "dus-card" },
+        el("div", { className: "dus-secHead" },
+          el("div", { className: "dus-secTitle" }, tr(props.t, "trendTitle")),
+        ),
+        // 有旧数据但本轮失败：显式标注陈旧并给行内重试（§6.3）
+        props.err === true
+          ? el("div", { className: "dus-degrade", style: { marginBottom: 8 } },
+            el("span", { className: "dus-errLine" }, tr(props.t, "degradeTrendStale")),
+            el("button", { type: "button", className: "dus-btnOutline dus-degradeBtn", onClick: props.onRetry }, tr(props.t, "degradeRetry")))
+          : null,
+        el("div", { className: "dus-chartInner" },
+          // 图例：纯展示，最多 6 个模型（按区间用量降序），不可点击隐藏
+          el("div", { className: "dus-legend" },
+            modelRows.map((m) => el("span", {
+              key: m.key,
+              className: "dus-legendItem",
+              title: m.key,
+            },
+              el("i", { className: "dus-legendSw", style: { background: m.color } }),
+              m.key,
+            )),
+          ),
+          el("div", wrapProps,
+              el("svg", {
+                width: "100%",
+                // viewBox 宽度 = 容器实测宽度 → 1:1 渲染，X 轴日期文字不随容器缩小而缩放
+                viewBox: "0 0 " + vbW + " " + TREND_H,
+                height: TREND_H,
+                style: { display: "block" },
+              },
+                // 横向虚线网格（按刻度值定位，线性/对数同一套逻辑）；不画 Y 轴刻度标签
+                // ——与 ZCode 一致（那边也只有虚线网格，无数值标签）
+                scale.ticks.map((tv, gi) => el("line", {
+                  key: "g" + gi,
+                  className: "dus-gridLn",
+                  x1: TREND_L,
+                  y1: Y(tv),
+                  x2: vbW - TREND_R,
+                  y2: Y(tv),
+                })),
+                // X 轴日期：首尾改为向内对齐（start / end），否则居中锚点会让
+                // 「9月21日」「10月20日」两端溢出绘图区被裁掉
+                points.map((p, i) => (showLbl(i) ? el("text", {
+                  key: "x" + i,
+                  className: "dus-axisTxt",
+                  x: X(i),
+                  y: TREND_H - 8,
+                  textAnchor: i === 0 ? "start" : i === points.length - 1 ? "end" : "middle",
+                }, labelOf(p)) : null)),
+                visibleRows.map((m) => el("path", {
+                  key: m.key,
+                  d: monotonePath(points.map((p, i) => [X(i), Y(modelValueOf(p, m.key))])),
+                  fill: "none",
+                  style: { stroke: m.color },
+                  strokeWidth: 2,
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                })),
+                // 悬停/游标圆点（仅激活时出现；静态图无数据点圆）。0 值模型也画在底线上。
+                hoverPoint !== null ? visibleRows.map((m) => el("circle", {
+                  key: "d-" + m.key,
+                  cx: X(shown.idx),
+                  cy: Y(modelValueOf(hoverPoint, m.key)),
+                  r: 4,
+                  fill: m.color,
+                  style: { stroke: "var(--dus-ttbg)" },
+                  strokeWidth: 2,
+                })) : null,
+              ),
+              tipProps === null ? null : el(TipCard, tipProps),
+            ),
+        ),
+      );
+    }
+    //#endregion
+
+    //#region A5 模型用量环形图（图例两行式；尺寸按 SPEC §6.2 明文值）
+    const DONUT_SIZE = 200;
+    const DONUT_R_OUT = 76;  // SPEC §6.2
+    const DONUT_R_IN = 50.4;  // SPEC §6.2
+    const DONUT_PAD = 2; // paddingAngle 2°
+
+    function DonutCard(props) {
+      const data = donutRowsOf(props.modelsResp, props.t);
+      const [tip, setTip] = react.useState(null); // {key,x,y,cw,ch}
+      const rowRef = react.useRef(null);
+      if (data === null || data.total <= 0 || data.rows.length === 0) {
+        return el("div", { className: "dus-card" },
+          el("div", { className: "dus-secHead" }, el("div", { className: "dus-secTitle" }, tr(props.t, "donutTitle"))),
+          props.err === true
+            ? el(DegradeLine, { text: tr(props.t, "degradeModels"), onRetry: props.onRetry, t: props.t })
+            : el("div", { className: "dus-hintLine" }, tr(props.t, "donutEmpty")),
+        );
+      }
+      const cx = DONUT_SIZE / 2;
+      const cy = DONUT_SIZE / 2;
+      let ang = -90;
+      const arcs = [];
+      for (const it of data.rows) {
+        const sweep = (it.tokens / data.total) * 360;
+        // 扇区过窄（sweep≤pad）扣不掉两侧内衬会画出倒翻路径：跳过绘制，图例行仍在。
+        if (sweep > DONUT_PAD) {
+          arcs.push({ it, a0: ang + DONUT_PAD / 2, a1: ang + sweep - DONUT_PAD / 2 });
+        }
+        ang += sweep;
+      }
+      // 悬停卡片（§6）：锚点=鼠标在整行内的位置——240px 的环形盒放不下 230 宽的卡片，
+      // 定位容器必须是整行（.dus-donutRow 已 position:relative），配合钳位才不溢出。
+      const showTip = (key) => (e) => {
+        const row = rowRef.current;
+        if (row === null) return;
+        const box = row.getBoundingClientRect();
+        setTip({ key, x: e.clientX - box.left, y: e.clientY - box.top, cw: box.width, ch: box.height });
+      };
+      let tipProps = null;
+      if (tip !== null) {
+        const hit = data.rows.filter((r) => r.key === tip.key)[0];
+        if (hit !== undefined) {
+          // 标题 + 1 行（token + 占比）：按实际行数估算高度
+          const pos = tipPlacementOf(tip.x, tip.y, tip.cw, tip.ch, TIP_W, tipHeightOf(1));
+          tipProps = { left: pos.left, top: pos.top, title: hit.key, lines: [donutTipTextOf(hit, data.total, props.t)] };
+        }
+      }
+      const top = data.rows[0];
+      return el("div", { className: "dus-card dus-donutCard" },
+        el("div", { className: "dus-secHead" },
+          el("div", { className: "dus-secTitle" }, tr(props.t, "donutTitle")),
+        ),
+        // 有旧数据但本轮失败：显式标注陈旧并给行内重试（§6.3）
+        props.err === true
+          ? el("div", { className: "dus-degrade", style: { marginBottom: 8 } },
+            el("span", { className: "dus-errLine" }, tr(props.t, "degradeModelsStale")),
+            el("button", { type: "button", className: "dus-btnOutline dus-degradeBtn", onClick: props.onRetry }, tr(props.t, "degradeRetry")))
+          : null,
+        el("div", { className: "dus-donutRow", ref: rowRef, onMouseLeave: () => setTip(null) },
+          el("div", { className: "dus-donutBox" },
+            el("svg", {
+              width: DONUT_SIZE, height: DONUT_SIZE, viewBox: "0 0 " + DONUT_SIZE + " " + DONUT_SIZE,
+              role: "img",
+              "aria-label": tr(props.t, "donutAriaLabel", { count: data.rows.length, total: fmtCompact(data.total, true, props.t) })
+                + " " + tr(props.t, "trendTopShare", { value: pctTextOf(top.tokens, data.total) }),
+            },
+              arcs.map((a) => el("path", {
+                key: a.it.key,
+                d: donutArcPath(cx, cy, DONUT_R_OUT, DONUT_R_IN, a.a0, a.a1),
+                fill: a.it.color,
+                onMouseEnter: showTip(a.it.key),
+              })),
+            ),
+            el("div", { className: "dus-donutCenter" },
+              el("div", { className: "dus-donutT" }, fmtCompact(data.total, true, props.t)),
+              el("div", { className: "dus-donutU" }, "tokens"),
+            ),
+          ),
+          // 图例两行式：上行=圆点+完整模型名+右对齐百分比；下行=subtle 短格式 token 数（缩进对齐名字）
+          // 右侧列表不做任何悬停文本：行内已显示占比与 token 数，再弹卡片/原生 title 只会遮挡相邻行。
+          el("div", { className: "dus-mlist" },
+            data.rows.map((it) => el("div", {
+              key: it.key, className: "dus-mrow",
+            },
+              el("div", { className: "dus-mrowTop" },
+                el("span", { className: "dus-msw", style: { background: it.color } }),
+                el("span", { className: "dus-mnm" }, it.key),
+                el("span", { className: "dus-mpc" }, pctTextOf(it.tokens, data.total)),
+              ),
+              el("div", { className: "dus-mrowSub" }, fmtCompact(it.tokens, true, props.t) + " tokens"),
+            )),
+          ),
+          // 卡片挂在**这一行**里（.dus-donutRow 的 position:relative 因此真正生效）：
+          // 挂到卡片层会让坐标基准（行）与定位祖先（卡片）错位，纵向恒定偏一个标题高
+          tipProps === null ? null : el(TipCard, tipProps),
+        ),
+      );
+    }
+    //#endregion
+
+    //#region 分区组件（三态 + 六块 UI 装配）
+    // 时间范围只暴露「近 7 日 / 近 30 日」两档（对齐产品设计稿）；只作用于趋势折线。
+    // label 走字典：中文「近 7 日」，英文「Last 7 Days」。
+    const RANGE_MODES = [
+      { value: 7, key: "rangeLast7" },
+      { value: 30, key: "rangeLast30" },
+    ];
+    const REFRESH_ICON = el("svg", {
+      key: "icon", width: 12, height: 12, viewBox: "0 0 24 24", fill: "none",
+      stroke: "currentColor", strokeWidth: 2.4, strokeLinecap: "round", strokeLinejoin: "round",
+    },
+      el("path", { d: "M21 12a9 9 0 1 1-2.64-6.36" }),
+      el("polyline", { points: "21 3 21 9 15 9" }),
+    );
+
+    function UsageStatsSection(props) {
+      // 宿主注入的翻译函数（t 的引用随语言切换而变 → React 自动重渲染，无需刷新页面）
+      const t = props !== null && props !== undefined ? props.t : void 0;
+      const [phase, setPhase] = react.useState("loading"); // loading | ready | empty | error
+      const [summary, setSummary] = react.useState(null);
+      const [hmDays, setHmDays] = react.useState(null);
+      // hmDays 的 ref 镜像：runLoad 的 useCallback 依赖固定为 [safeSet]，
+      // 直接读 state 会拿到过期的闭包值（热力图「从未拿到过」判据必须看最新）
+      const hmDaysRef = react.useRef(null);
+      const [hmMode, setHmMode] = react.useState("daily");
+      const [range, setRange] = react.useState(7); // 默认近 7 日
+      const [trend, setTrend] = react.useState(null);
+      const [modelsResp, setModelsResp] = react.useState(null);
+      const [blockErr, setBlockErr] = react.useState({});
+      const [refreshing, setRefreshing] = react.useState(false);
+      const [updatedAt, setUpdatedAt] = react.useState(null); // 「更新于 HH:MM」（§6 全 ok 才推进）
+      const [staleTick, setStaleTick] = react.useState(false); // 最近一拍有路失败：时间戳旁给可见标注
+      // 回填跟踪（§6）：tracking=本面板正在跟一次回填（挂载发现 or 手动发起）；
+      // message=成果/失败/兜底文案；status=实时进度（供「已扫 X/Y」）
+      const [backfill, setBackfill] = react.useState({ tracking: false, status: null, message: null });
+      const seqRef = react.useRef(0);
+      // 每路（summary/heatmap/trend/models）各自的最新 seq：判废按 key 比对，
+      // 避免「后发起的拍整包吞掉前一趟的有效数据」
+      const keySeqRef = react.useRef({});
+      const mountedRef = react.useRef(false);
+      const backfillTimerRef = react.useRef(null);   // 单一 ticker 的句柄（挂载/手动共用）
+      const backfillActiveRef = react.useRef(false); // 本面板是否已有一条在跟的链（唯一判据，只在 stop 里清）
+      const backfillFailRef = react.useRef(0);       // status 连续失败计数（跨 tick）
+      const sawRunningRef = react.useRef(false);     // 是否观察到过 running=true（决定跑完要不要刷新）
+      const rangeRef = react.useRef(7);              // 当前 range：给轮询/回填后刷新用，避开 stale 闭包
+      const inflightRef = react.useRef(0);           // 非静默在飞计数（§6：刷新闩与 seq 解耦）
+      const lastSumRef = react.useRef(null);         // {totalTokens, today}：静默拍按需刷热力图的判定输入
+      const stopBackfillTicker = () => {
+        backfillActiveRef.current = false; // 唯一清点：链结束/放弃/卸载都走这里
+        if (backfillTimerRef.current !== null) {
+          clearTimeout(backfillTimerRef.current);
+          backfillTimerRef.current = null;
+        }
+      };
+      react.useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+          mountedRef.current = false;
+          // safeSet 只兜 state 写入；定时器链要显式清，否则卸载后轮询空转到回填结束
+          stopBackfillTicker();
+        };
+      }, []);
+      const safeSet = react.useCallback((fn) => {
+        if (mountedRef.current) fn();
+      }, []);
+
+      // runLoad：四路请求互不拖垮（逐路落 state，单路失败只亮自己的降级行）；
+      // seq 递增取最新，过期响应整包丢弃（reload 防重入）。
+      // 三档口径：full=四路全拉（summary+heatmap+trend+models）；
+      // silent（60s 拍）=summary + 当前 range 的 trend + models（全期口径，会随新会话增长），
+      // 外加「总量/今天变了才补」的 heatmap；
+      // chartsOnly（换档）=只拉 trend（models 全期不变，无需重拉）。
+      // 刷新闩走 in-flight 计数（§6）：被新拍顶掉的旧拍也一定在 finally 复位，不再卡「刷新中…」。
+      const runLoad = react.useCallback(async (rangeArg, opts) => {
+        const chartsOnly = opts !== null && opts !== undefined && opts.chartsOnly === true;
+        const initial = opts !== null && opts !== undefined && opts.initial === true;
+        const silent = opts !== null && opts !== undefined && opts.silent === true;
+        const full = !chartsOnly; // full=初始 load/用户显式刷新（可改 phase）；chartsOnly=换档/静默拍
+        const seq = ++seqRef.current;
+        if (!silent) {
+          inflightRef.current += 1;
+          if (inflightRef.current === 1) safeSet(() => setRefreshing(true));
+        }
+        if (initial) safeSet(() => setPhase("loading"));
+        const wrote = {};  // key -> "ok"|"err"，只含本轮真正发起的路线
+        const values = {};
+        try {
+          // 换档拍（chartsOnly 且非静默）不重拉 models：口径全期、与 range 无关，省一次请求；
+          // 静默拍必须拉：全期用量随新会话增长，与 range 无关（SPEC §6.5）。
+          const skipModels = chartsOnly && !silent;
+          const jobs = [
+            // 静默拍带 summary（按需刷热力图要用它判定）；换档拍不带（只需趋势）
+            full || silent ? ["summary", api.summary()] : null,
+            full ? ["heatmap", api.heatmap()] : null,
+            ["trend", api.trend(rangeArg)],
+            skipModels ? null : ["models", api.models()],
+          ].filter((job) => job !== null);
+          // 登记每一路的 seq 必须在 await **之前**：
+          // 若等响应回来再登记，慢请求完成后会把快请求已登记的 seq 覆盖成旧值，
+          // 令过期响应被误判为「这一路最新」而落地（数据回退）。
+          // 只许递增：并发拍下后发者 seq 更大，不能被先发者反向覆盖。
+          for (const job of jobs) {
+            const prev = keySeqRef.current[job[0]];
+            if (prev === undefined || seq > prev) keySeqRef.current[job[0]] = seq;
+          }
+          const settled = await Promise.allSettled(jobs.map((job) => job[1]));
+          jobs.forEach((job, i) => {
+            const key = job[0];
+            const res = settled[i];
+            if (res.status !== "fulfilled") {
+              wrote[key] = "err";
+              console.warn(PREFIX + "failed to read " + key + ": " + describeError(res.reason));
+              return;
+            }
+            if (!validOf(key, res.value)) {
+              wrote[key] = "err";
+              console.warn(PREFIX + key + " response shape does not match SPEC §5, treated as a failure.");
+              return;
+            }
+            wrote[key] = "ok";
+            values[key] = res.value;
+          });
+          // 静默拍按需补热力图（§6）：只在总量/「今天」变了才拉——空闲时零额外请求。
+          // 基线推进规则：只在「本轮不需要拉」或「拉到了」时推进 lastSumRef；
+          // 拉了但失败则保留旧基线，下一拍（60s）自然重试——否则判定信号被消费，热力图静默冻结。
+          let nextSum = null;
+          let heatmapNeeded = false;
+          if (wrote.summary === "ok") {
+            nextSum = { totalTokens: Number(values.summary.totalTokens) || 0, today: dateKey(new Date()) };
+            // 热力图从未拿到过（hmDays 仍为 null）时必拉：否则「按需补拉」永远等不到
+            // 「总量变了」这个信号（baseline 也因丢弃而未推进）→ 热力图永久停在「加载中…」
+            heatmapNeeded = full || hmDaysRef.current === null || needHeatmapRefreshOf(lastSumRef.current, nextSum);
+            if (silent && heatmapNeeded) {
+              try {
+                const hmValue = await api.heatmap();
+                if (validOf("heatmap", hmValue)) {
+                  wrote.heatmap = "ok";
+                  values.heatmap = hmValue;
+                } else {
+                  wrote.heatmap = "err";
+                  console.warn(PREFIX + "heatmap response shape does not match SPEC §5, treated as a failure.");
+                }
+              } catch (error) {
+                wrote.heatmap = "err";
+                console.warn(PREFIX + "failed to read heatmap: " + describeError(error));
+              }
+            }
+          }
+          const attempted = Object.keys(wrote);
+          const allFailed = attempted.length > 0 && attempted.every((key) => wrote[key] === "err");
+          let computed = null;
+          if (full || silent) {
+            const sumVal = wrote.summary === "ok" ? values.summary : null;
+            const hmVal = wrote.heatmap === "ok" ? values.heatmap : null;
+            const empty = !allFailed && sumVal !== null && Number(sumVal.totalTokens) === 0
+              && (hmVal === null || !Array.isArray(hmVal.days) || hmVal.days.every((d) => !(Number(d !== null && typeof d === "object" ? d.tokens : 0) > 0)));
+            computed = allFailed ? "error" : empty ? "empty" : "ready";
+          }
+          // 按 key 判废：某一拍被后发起的拍顶掉时，只丢它「比别的拍更新」的那几路，
+          // 别的路（如 full 拍的 heatmap）仍可落地。整包丢弃会让「初始加载 >60s」
+          // 或「刷新与静默拍撞车」时热力图永久停在「加载中…」（既无降级行也无重试出口）。
+          const fresh = Object.keys(wrote).filter((key) => keySeqRef.current[key] === seq);
+          if (fresh.length === 0) {
+            // 本拍没有任何一路是最新：整包丢弃。
+            // 唯一例外=初始拍至少要把面板从 loading 里放出来——静默拍的单调规则救不了它
+            //（loading→empty 是 no-op），否则首装回填期间连「正在回填历史会话…」都看不到。
+            if (initial && computed !== null) {
+              const escaped = computed;
+              safeSet(() => setPhase((prev) => (prev === "loading" ? escaped : prev)));
+            }
+            return;
+          }
+          safeSet(() => {
+            if (wrote.summary === "ok" && fresh.includes("summary")) setSummary(values.summary);
+            if (wrote.heatmap === "ok" && fresh.includes("heatmap")) {
+              hmDaysRef.current = values.heatmap.days;
+              setHmDays(values.heatmap.days);
+            }
+            if (wrote.trend === "ok" && fresh.includes("trend")) setTrend(values.trend);
+            if (wrote.models === "ok" && fresh.includes("models")) setModelsResp(values.models);
+            setBlockErr((prev) => {
+              const next = Object.assign({}, prev);
+              for (const key of fresh) next[key] = wrote[key] === "err";
+              return next;
+            });
+            // 「更新于 HH:MM」（§6）：本轮实际发起的每一路都成功才推进（部分降级时冻结
+            // 并由「部分数据未更新」标注——光冻结时间戳太弱，用户看不出是没变还是没拉到）
+            if (fresh.length > 0) {
+              const allOk = fresh.every((key) => wrote[key] === "ok");
+              if (allOk) {
+                setUpdatedAt(new Date());
+                setStaleTick(false);
+              } else {
+                setStaleTick(true); // 已有数据的面板保留旧值，但明确标注本轮没取全
+              }
+            }
+          });
+          if (nextSum !== null && (!heatmapNeeded || wrote.heatmap === "ok")) lastSumRef.current = nextSum;
+          if (computed !== null) {
+            // §6：静默拍单调（只允许升到 ready）；full 拍全权
+            safeSet(() => setPhase((prev) => phaseAfterTick(prev, computed, silent)));
+          }
+        } finally {
+          if (!silent) {
+            if (inflightRef.current > 0) inflightRef.current -= 1;
+            if (inflightRef.current === 0) safeSet(() => setRefreshing(false));
+          }
+        }
+      }, [safeSet]);
+
+      react.useEffect(() => {
+        void runLoad(7, { initial: true });
+      }, [runLoad]);
+
+      // 60s 轻轮询（§6/2）：silent 档，不进 loading/刷新态；静默拍只允许把面板从空态升级到
+      // 就绪（治「空态没有自愈出路」），绝不把有数据的面板打成空态/错误态。回前台立即补一拍；
+      // 后台标签页（document.hidden）跳拍；range 走 ref，换档不重挂定时器。
+      react.useEffect(() => {
+        const tick = () => {
+          if (typeof document !== "undefined" && document.hidden === true) return;
+          void runLoad(rangeRef.current, { chartsOnly: true, silent: true });
+        };
+        const timer = setInterval(tick, 60000);
+        const onVisibility = () => {
+          if (typeof document !== "undefined" && document.hidden !== true) tick();
+        };
+        if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVisibility);
+        return () => {
+          clearInterval(timer);
+          if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVisibility);
+        };
+      }, [runLoad]);
+
+      const handleRange = (r) => {
+        rangeRef.current = r;
+        setRange(r);
+        void runLoad(r, { chartsOnly: true });
+      };
+      const handleRefresh = () => {
+        void runLoad(rangeRef.current, {});
+      };
+
+      // 回填跟踪（§6）：单一 ticker——挂载发现「正在跑」与手动发起共用它，绝不起第二条链。
+      // origin 决定连续失败 3 次后的文案；卸载后 await 返回不再重挂句柄。
+      const backfillTick = react.useCallback(async () => {
+        if (!mountedRef.current) return;
+        let status = null;
+        try {
+          status = await api.backfillStatus();
+          backfillFailRef.current = 0;
+        } catch (error) {
+          backfillFailRef.current += 1;
+          console.warn(PREFIX + "failed to read backfill status: " + describeError(error));
+        }
+        if (!mountedRef.current) return; // 卸载发生在 await 里：不再重挂
+        if (backfillFailRef.current >= 3) {
+          stopBackfillTicker();
+          safeSet(() => setBackfill({
+            tracking: false, status: null,
+            // 显式降级：冻结的假进度比报错更糟——退出跟踪态并把「刷新」按钮留给用户
+            message: tr(t, "backfillStatusUnavailable"),
+          }));
+          return;
+        }
+        if (status !== null) {
+          safeSet(() => setBackfill((prev) => ({ tracking: prev.tracking, status, message: prev.message })));
+          if (status.running !== true) {
+            // 失败信号判先于成功文案：后台崩溃若被报成「回填完成」，
+            // 面板却因 daily 缺档显示暂无数据——自相矛盾的成功
+            if (status.error !== undefined && status.error !== null && status.error !== "") {
+              stopBackfillTicker();
+              safeSet(() => setBackfill({ tracking: false, status, message: tr(t, "backfillFailed", { reason: backfillErrorText({ message: status.error }, t) }) }));
+              return;
+            }
+            const done = Math.max(0, Math.round(Number(status.backfilled) || 0));
+            const records = Math.max(0, Math.round(Number(status.records) || 0));
+            const observed = sawRunningRef.current;
+            sawRunningRef.current = false;
+            stopBackfillTicker();
+            safeSet(() => setBackfill({ tracking: false, status, message: tr(t, "backfillDone", { sessions: done, records }) }));
+            // 只在确实观察到过 running=true 时才全量刷新（首读即 false=本轮没跑过回填）
+            if (observed) void runLoad(rangeRef.current, {});
+            return;
+          }
+          sawRunningRef.current = true;
+        }
+        backfillTimerRef.current = setTimeout(() => { void backfillTick(); }, 800);
+      }, [runLoad, safeSet, t]);
+
+      // 单一入口（§6）：挂载发现「正在跑」从这里进入——唯一判据 backfillActiveRef
+      // （不能用 state 的 tracking 当判据：它要等 React 提交，挂载竞态会放进第二条链）。
+      const startBackfillTracking = (message, initialStatus) => {
+        const msg = message === undefined ? null : message;
+        if (backfillActiveRef.current) {
+          // 已在跟：只更新文案，绝不另起链
+          safeSet(() => setBackfill((prev) => ({ tracking: true, status: prev.status, message: msg === null ? prev.message : msg })));
+          return;
+        }
+        backfillActiveRef.current = true;
+        backfillFailRef.current = 0;
+        safeSet(() => setBackfill({ tracking: true, status: initialStatus === undefined ? null : initialStatus, message: msg }));
+        void backfillTick();
+      };
+
+      // 挂载即读一次状态（§6）：装载自动回填在跑时，面板立刻进入跟踪态——
+      // 否则用户看到的是「暂无使用数据」，而真相是「正在回填」。
+      react.useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+          let status = null;
+          try {
+            status = await api.backfillStatus();
+          } catch (error) {
+            console.warn(PREFIX + "failed to read backfill status on load: " + describeError(error)); // 读不到不作为：主数据与手动路径照常
+          }
+          if (cancelled || !mountedRef.current) return;
+          if (status !== null && status.running === true) startBackfillTracking(null, status);
+        })();
+        return () => { cancelled = true; };
+      }, [backfillTick, safeSet]);
+
+      // 空态期间补读回填状态：挂载那一刻可能正好错过 running=true（宿主用 setImmediate
+      // 触发自动回填，running 标记在 runBackfill 内部才置位），此后若无补读就永远进不了
+      // 跟踪态——回填完成后也不会触发那次全量刷新（sawRunning 恒为 false）。
+      react.useEffect(() => {
+        if (phase !== "empty" || backfill.tracking) return;
+        let cancelled = false;
+        void (async () => {
+          let status = null;
+          try {
+            status = await api.backfillStatus();
+          } catch {
+            return; // 读不到就下一轮再说
+          }
+          if (cancelled || !mountedRef.current) return;
+          if (status !== null && status.running === true) startBackfillTracking(null, status);
+        })();
+        return () => { cancelled = true; };
+      }, [phase, backfill.tracking, backfillTick, safeSet]);
+
+      const head = el("div", { key: "head", className: "dus-head" },
+        el("div", { className: "dus-titleRow" },
+          el("h1", { className: "dus-title" }, tr(t, "sectionLabel")),
+          el("span", { className: "dus-badge" }, tr(t, "sectionBadge")),
+        ),
+      );
+      const ui = backfillUiOf({
+        tracking: backfill.tracking,
+        scanned: backfill.status === null ? null : backfill.status.scanned,
+        total: backfill.status === null ? 0 : backfill.status.total,
+      }, t);
+      const footRow = el("div", { key: "foot", className: "dus-footRow" },
+        // 「更新于 HH:MM」：页脚左端，本轮全部路线成功才推进；有路失败时显式标注，
+        // 免得用户把「冻结的时间戳」读成「数据没变」。
+        // 首拍即失败时还没有时间戳：此时也要给出「本轮没取到」的可见信号，
+        // 否则页脚整格消失——用户无法区分「没数据」与「服务挂了」。
+        updatedAt !== null ? el("span", {
+          key: "upd", className: "dus-updatedAt",
+          title: staleTick ? tr(t, "footStale") : undefined,
+        }, tr(t, "footUpdatedAt", { time: fmtClock(updatedAt) }) + (staleTick ? tr(t, "footPartial") : ""))
+          : staleTick
+            ? el("span", { key: "upd", className: "dus-updatedAt" }, tr(t, "footNoData"))
+            : null,
+        el("button", {
+          type: "button", className: "dus-btnOutline", disabled: refreshing, onClick: handleRefresh,
+        }, REFRESH_ICON, refreshing ? tr(t, "footRefreshing") : tr(t, "footRefresh")),
+      );
+      const footMsg = backfill.message === null ? null : el("div", { key: "footMsg", className: "dus-hintLine" }, backfill.message);
+
+      if (phase === "loading") {
+        // StateBox 只渲染 title/desc（不渲染 children）——旧写法把文案当 children 传进去，
+        // 首屏实际是一个空白盒
+        return el("div", { className: "dus-root" }, head, el(StateBox, { key: "state", desc: tr(t, "stateLoading"), t }), footRow, footMsg);
+      }
+      if (phase === "error") {
+        return el("div", { className: "dus-root" }, head,
+          el(StateBox, {
+            key: "state", title: tr(t, "stateError"),
+            desc: tr(t, "stateErrorDesc"),
+            onRetry: handleRefresh,
+            t,
+          }),
+          footRow, footMsg);
+      }
+      if (phase === "empty") {
+        // 跟踪态与空态是同一块位置的两个面貌（§6）：正在回填时说「正在回填历史会话…」，
+        // 而不是把真相藏在一句「暂无使用数据」后面
+        return el("div", { className: "dus-root" }, head,
+          el(StateBox, { key: "state", title: ui.emptyTitle, desc: ui.emptyDesc, t }),
+          footRow, footMsg);
+      }
+
+      // ready：六块 UI。单路失败不炸面板——对应块给显式降级行（可见降级）。
+      const children = [head];
+      // 回填进度全程可见（§6）：ready 态下也显示跟踪进度，否则用户在整个回填期间
+      // 看不到任何提示（只有空态才显示），与「回填完成」那一刻的突然刷新形成落差。
+      if (backfill.tracking) {
+        const st = backfill.status;
+        const hasProgress = st !== null && Number(st.total) > 0;
+        const progress = hasProgress
+          ? tr(t, "backfillRunningScanned", {
+            scanned: Math.round(Number(st.scanned) || 0),
+            total: Math.round(Number(st.total) || 0),
+          })
+          : tr(t, "backfillTakesMinutes");
+        children.push(el("div", { key: "bfLine", className: "dus-hintLine" }, progress));
+      }
+      children.push(summary === null
+        ? el("div", { key: "strip", className: "dus-card" },
+          blockErr.summary === true
+            ? el(DegradeLine, { text: tr(t, "degradeSummary"), onRetry: handleRefresh, t })
+            : el("div", { className: "dus-hintLine" }, tr(t, "stateLoading")))
+        : el("div", { key: "strip", className: "dus-card" },
+          // 有旧数据但本轮失败：显式标注陈旧并给行内重试（§6.3「本次失败就该出现」）
+          blockErr.summary === true
+            ? el(DegradeLine, { text: tr(t, "degradeSummaryStale"), onRetry: handleRefresh, t })
+            : null,
+          el(SummaryStrip, { summary, t })));
+      if (hmDays === null) {
+        children.push(el("div", { key: "hm", className: "dus-card dus-cardTight" },
+          el("div", { className: "dus-secHead" }, el("div", { className: "dus-secTitle" }, tr(t, "heatmapTitle"))),
+          // 「本轮拉失败」才叫降级；「还没到」只是加载中——两者不能混
+          blockErr.heatmap === true
+            ? el(DegradeLine, { text: tr(t, "degradeHeatmap"), onRetry: handleRefresh, t })
+            : el("div", { className: "dus-hintLine" }, tr(t, "stateLoading"))));
+      } else {
+        children.push(el(HeatmapCard, {
+          key: "hm", days: hmDays, mode: hmMode, onMode: setHmMode,
+          stale: blockErr.heatmap === true, onRetry: handleRefresh, t,
+        }));
+      }
+      const rangeLabel = tr(t, (RANGE_MODES.filter((o) => o.value === range)[0] || { key: "rangeLast30" }).key);
+      children.push(el("div", { key: "range", className: "dus-secHead dus-rangeHead" },
+        // §6：这组只作用于下方趋势折线（模型用量恒为全期，不随此切换）
+        el("div", { className: "dus-secTitle" }, tr(t, "rangeTitle")),
+        el(Pills, {
+          options: RANGE_MODES.map((o) => ({ value: o.value, label: tr(t, o.key) })),
+          value: range, onChange: handleRange,
+        }),
+      ));
+      children.push(el(TrendCard, { key: "trend", trend, err: blockErr.trend === true, onRetry: handleRefresh, rangeLabel, t }));
+      children.push(el(DonutCard, {
+        key: "donut", modelsResp, err: blockErr.models === true, onRetry: handleRefresh, t,
+      }));
+      children.push(footRow);
+      if (footMsg !== null) children.push(footMsg);
+      return el("div", { className: "dus-root" }, children);
+    }
+
+    //#endregion
+
+    //#region 设置区错误边界（slot 组件崩溃=整页设置白屏）
+    class SectionBoundary extends react.Component {
+      constructor(props) {
+        super(props);
+        this.state = { error: null };
+        this.retry = () => { this.setState({ error: null }); };
+      }
+      static getDerivedStateFromError(error) {
+        return { error };
+      }
+      componentDidCatch(error) {
+        console.warn(PREFIX + "the panel failed to render and fell back to a banner: " + describeError(error));
+      }
+      render() {
+        if (this.state.error !== null) {
+          const t = this.props.t;
+          return el("div", { className: "dus-root" },
+            el("div", { className: "dus-head" },
+              el("div", { className: "dus-titleRow" },
+                el("h1", { className: "dus-title" }, tr(t, "sectionLabel")),
+                el("span", { className: "dus-badge" }, tr(t, "sectionBadge")),
+              ),
+            ),
+            el("div", { className: "dus-stateBox" },
+              tr(t, "errorPanelRender"),
+              el("div", { className: "dus-stateBtn" },
+                el("button", { type: "button", className: "dus-btnOutline", onClick: this.retry }, tr(t, "degradeRetry")),
+              ),
+            ),
+          );
+        }
+        return this.props.children;
+      }
+    }
+    function BoundedSection(props) {
+      // t 由宿主按 locale 命名空间注入（引用随语言切换而变）——错误边界也用同一份
+      return el(SectionBoundary, { t: props.t }, el(UsageStatsSection, props));
+    }
+    //#endregion
+
+    //#region 主面板（侧边栏独立模块，与「插件」「自动化任务」同级）
+    /** 导航行与主面板共用同一个 id：侧边栏按 id 寻址 `main` keyed slot 的组件。 */
+    const PANEL_ID = "usage-stats";
+    /** 排在「插件」(0) 与「自动化任务」(10) 之后、「更多」之前。 */
+    const PANEL_ORDER = 20;
+
+    /**
+     * 侧边栏导航行图标：与官方面板行同款线性图标（尺寸由侧边栏按展开/收起给 16/18）。
+     * 侧边栏自己负责无障碍名称与选中态，这里只画装饰性图形。
+     */
+    function UsageStatsPanelIcon(props) {
+      const size = typeof props.size === "number" && props.size > 0 ? props.size : 16;
+      return el("svg", {
+        width: size, height: size, viewBox: "0 0 16 16", fill: "none",
+        "aria-hidden": "true", focusable: "false",
+      },
+        // 三根柱：一眼可读的「用量统计」语义，线宽对齐官方 16px 图标
+        el("path", {
+          d: "M3.25 13V9.25M8 13V3.25M12.75 13V6.75",
+          stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round",
+        }),
+      );
+    }
+
+    /**
+     * 主面板页面骨架：中心列不给内边距与滚动，页面自持（与官方「自动化任务」页一致），
+     * 内容区限宽居中，保持看板原有观感。
+     */
+    function UsageStatsPage(props) {
+      return el("div", { className: "dus-page" },
+        el("div", { className: "dus-pageScroll" },
+          el("div", { className: "dus-pageContent" }, el(BoundedSection, props)),
+        ),
+      );
+    }
+    //#endregion
+
+    //#region apply（生命周期装配）
+    function apply(ctx) {
+      if (ctx === null || typeof ctx !== "object" || ctx.slots === null || ctx.slots === undefined) {
+        // fail-visible：注册不了就明说，绝不静默装死。
+        console.warn(PREFIX + "the host did not provide slots; the usage-stats panel was not registered.");
+        return;
+      }
+      // 国际化：宿主 @deepseek-ai/dsh-client-locale 提供 ctx.locale。
+      // 字典注册走 ctx.effect——卸载时自动注销，避免热重载后「同一命名空间重复注册」抛错。
+      let boundT = null;
+      if (ctx.locale !== null && ctx.locale !== undefined) {
+        ctx.effect(
+          () => ctx.locale.register(LOCALE_NS, LOCALE_DICT),
+          "dsh-usage-stats: locale dictionary",
+        );
+        // 绑定函数引用稳定，但每次调用读**当前**语言——导航 label 用它即可跟随切换
+        boundT = ctx.locale.bind(LOCALE_NS);
+      } else {
+        console.warn(PREFIX + "the host did not provide locale; the panel stays in Chinese.");
+      }
+      // 主面板内容：keyed slot 按侧边栏条目 id 寻址；缺了它，点导航行会抛错并保留当前面板。
+      ctx.slots.inject("main", () =>
+        ctx.slots.register(
+          {
+            name: "main",
+            key: PANEL_ID,
+            // 声明 locale 命名空间：宿主据此注入 t prop（引用随语言切换而变 → 自动重渲染）
+            locale: LOCALE_NS,
+          },
+          UsageStatsPage,
+        ),
+      );
+      // 侧边栏导航行：list slot，图标与 label 由宿主渲染，选中态/收起提示由宿主处理。
+      ctx.slots.inject("sidebar.panellist", () =>
+        ctx.slots.register(
+          {
+            name: "sidebar.panellist",
+            id: PANEL_ID,
+            order: PANEL_ORDER,
+            locale: LOCALE_NS,
+            label: () => tr(boundT, "sectionLabel"),
+          },
+          UsageStatsPanelIcon,
+        ),
+      );
+    }
+    //#endregion
+
+    const inject = ["slots", "locale"];
+
+    exports.apply = apply;
+    exports.inject = inject;
+    // 测试直测面（纯函数集合；零 DOM 依赖，node:test 桩 require 物化后可直调）。
+    exports.__pure = Object.freeze({
+      localeDict: LOCALE_DICT,
+      localeNs: LOCALE_NS,
+      interpolate,
+      fallbackT,
+      fmtCompact,
+      fmtFull,
+      fmtDuration,
+      fmtStreak,
+      dateKey,
+      parseDateKey,
+      addDays,
+      fmtDayCn,
+      fmtFullDayCn,
+      hmLevel,
+      hmColumnsOf,
+      hmMonthLabelsOf,
+      hmRenderOf,
+      monotonePath,
+      paletteVar,
+      modelValueOf,
+      trendModelRowsOf,
+      trendScaleOf,
+      trendYNorm,
+      donutRowsOf,
+      donutArcPath,
+      validOf,
+      // v0.2.0 增量（SPEC §6）
+      phaseAfterTick,
+      summaryCellsOf,
+      tipPlacementOf,
+      tipRowsOf,
+      hiddenModelRowsOf,
+      pctTextOf,
+      donutTipTextOf,
+      needHeatmapRefreshOf,
+      cursorStepOf,
+      backfillUiOf,
+    });
+    // 组件面（供行为级直测；宿主只读 apply/inject，多导出无副作用）
+    exports.__ui = Object.freeze({
+      UsageStatsSection,
+      UsageStatsPage,
+      UsageStatsPanelIcon,
+      SummaryStrip,
+      HeatmapCard,
+      TrendCard,
+      DonutCard,
+      TipCard,
+      DegradeLine,
+      StateBox,
+      Pills,
+    });
+    return module.exports;
+  },
+});

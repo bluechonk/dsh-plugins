@@ -1,0 +1,15 @@
+# dsh-skills-manager —— 「技能」分区插件 loader 配置。
+#
+# id  : 插件在宿主里的稳定标识，与 npm 包名保持一致（@bluechonk/dsh-skills-manager）。
+#       改它会丢用户配置，勿动；卸载时用这个 id 在插件管理器里定位。
+# name: npm 包名（scope 版），宿主按此名在 profile 的 node_modules 里解析插件包。
+#
+# host 半(lib/index.js)：挂同源 HTTP 路由，扫描技能根目录并提供列表/详情/启停/导入/删除。
+# client 半(client/client.js)：注册侧边栏导航行「技能」(sidebar.panellist order 30)
+#   与对应主面板（main keyed，key=skills-manager），位置与「插件」「自动化任务」「使用统计」同级。
+#
+# 回滚：plugin remove（或本 patch enabled:false）；插件自身不写任何持久化数据。
+- insert:
+    - id: '@bluechonk/dsh-skills-manager'
+      name: '@bluechonk/dsh-skills-manager'
+      config: {}
