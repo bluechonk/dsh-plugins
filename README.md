@@ -51,6 +51,21 @@ npm run index:check    # 只比对，不一致则非零退出
 
 **发版流程**：改完插件 → `npm test` → `npm run index` → 提交（`market-index.json` 里的 commit 必须已推送，否则索引指向一个拉不到的提交）。CI 会跑 `index:check` 挡住漏更新的索引。
 
+## 致谢与许可
+
+本仓库的代码均由 bluechonk 编写，提交者只有 bluechonk 一人。两个插件各自借鉴了社区成果，在此一并明确声明；各插件目录内的 README 与 LICENSE 有对应的完整说明。
+
+**dsh-skills-manager**
+
+- 目录扫描、frontmatter 解析与整体形态参考了 [pengxiaozi/dsh-plugins](https://github.com/pengxiaozi/dsh-plugins) 的 `dsh-skill-panel`（MIT），并在其只读能力之上补齐了范围切换与写操作。
+
+**dsh-usage-stats**
+
+- 看板实现基于 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)（MIT）。
+- 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本仓库在此基础上重做了看板。
+- 界面形态参考 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）的「使用统计」面板设计，配色取其 CSS 变量真值。
+- 采集与折叠语义对齐官方 `@deepseek-ai/dsh-token-meter` 的 `tokenUsage` 投影，不含其代码。
+
 ## 许可证
 
-MIT，见 [LICENSE](LICENSE)。各插件目录内保留自己的 LICENSE。
+MIT，见 [LICENSE](LICENSE)。各插件目录内保留自己的 LICENSE，其中包含所借鉴项目的原始版权声明。
