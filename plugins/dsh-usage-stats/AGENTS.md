@@ -47,6 +47,8 @@ icon.svg、cordis.patch.yml、package.json
 - **没有明确要求就不发版**：日常改代码既不 bump 版本号、也不打 tag；未发版的改动在 `CHANGELOG.md` 顶部「未发布」段里累积。
 - 发版只在用户明确说「发版 / 出个版本」时做：`npm run check` + `npm test` 全绿 → 把「未发布」段定版为 `0.1.x`
   并 bump 版本号 → 走 dsh-plugins 的 PR 流程合入。
+- 发版合并后，在仓库根跑 `npm run index` 并**单独提交**索引（索引是发布产物，详见根 `README.md`）；
+  不更新索引会导致 `index:check` 红。
 - `0.1.x` 连续递增不跳号；版本以 `package.json` 与 `CHANGELOG.md` 为准，索引里的版本号由仓库根的
   `scripts/sync-index.mjs` 从 `package.json` 读取。
 
