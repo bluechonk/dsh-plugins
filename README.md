@@ -53,17 +53,15 @@ npm run index:check    # 只比对，不一致则非零退出
 
 ## 致谢与许可
 
-本仓库的代码均由 bluechonk 编写，提交者只有 bluechonk 一人。两个插件各自借鉴了社区成果，在此一并明确声明；各插件目录内的 README 与 LICENSE 有对应的完整说明。
-
 **dsh-skills-manager**
 
-- 目录扫描、frontmatter 解析与整体形态参考了 [pengxiaozi/dsh-plugins](https://github.com/pengxiaozi/dsh-plugins) 的 `dsh-skill-panel`（MIT），并在其只读能力之上补齐了范围切换与写操作。
+- 目录扫描、frontmatter 解析与整体形态参考 [pengxiaozi/dsh-plugins](https://github.com/pengxiaozi/dsh-plugins) 的 `dsh-skill-panel`（MIT）。该插件的 lib 与 client 代码为重写，实测与参考项目几乎无相同行，仅形态沿用。
 
 **dsh-usage-stats**
 
-- 看板实现基于 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)（MIT）。
-- 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本仓库在此基础上重做了看板。
-- 界面形态参考 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）的「使用统计」面板设计，配色取其 CSS 变量真值。
+- 看板实现衍生自 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)（MIT）：核心逻辑 `lib/aggregate.js`、`lib/store.js`、`lib/fold.js`、`lib/index.js` 与其有 64%–97% 相同行，故沿用其原始版权声明。
+- 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本插件重做了看板（`lib/client.js` 仅约 38% 相同）。
+- 界面形态参考 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）的「使用统计」面板设计，配色取其 CSS 变量真值，不含其代码。
 - 采集与折叠语义对齐官方 `@deepseek-ai/dsh-token-meter` 的 `tokenUsage` 投影，不含其代码。
 
 ## 许可证
