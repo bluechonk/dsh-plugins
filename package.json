@@ -7,7 +7,8 @@
     "check": "node scripts/check-all.mjs",
     "test": "node scripts/test-all.mjs",
     "index": "node scripts/sync-index.mjs",
-    "index:check": "node scripts/sync-index.mjs --check"
+    "index:check": "node scripts/sync-index.mjs --check",
+    "hooks:install": "git config core.hooksPath .githooks"
   },
   "engines": {
     "node": ">=22"

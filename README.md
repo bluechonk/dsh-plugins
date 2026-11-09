@@ -47,9 +47,21 @@ npm run check          # 各插件语法检查
 npm test               # 各插件单测
 npm run index          # 重新生成 market-index.json
 npm run index:check    # 只比对，不一致则非零退出
+npm run hooks:install  # 启用 .githooks（每个 clone 执行一次）
 ```
 
-**发版流程**：改完插件 → `npm test` → `npm run index` → 提交（`market-index.json` 里的 commit 必须已推送，否则索引指向一个拉不到的提交）。CI 会跑 `index:check` 挡住漏更新的索引。
+**发版流程**：改完插件 → `npm test` → `npm run index` → 开分支提 PR（`market-index.json` 里的 commit 必须已推送，否则索引指向一个拉不到的提交）。CI 会跑 `index:check` 挡住漏更新的索引。
+
+## 分支与合并
+
+`main` 受服务端分支保护，不能直推，只能通过 PR 合入：
+
+- 直推 `main`（含强推、删除）会被服务端拒绝，本地 `.githooks/pre-push` 也会在联网前拦下。
+- 合并只允许 Squash Merge，`main` 保持线性历史。
+- CI 的 `test (22.x)`、`test (24.x)` 必须通过才能合并。
+- 个人仓库没有第二人可审批，因此不设强制 approve 数；PR 流程、CI 状态与 squash 约束才是硬门禁。
+
+未启用钩子时，`pre-push` 的本地检查不会执行，只有服务端保护兜底。启用方式见上面的 `npm run hooks:install`。
 
 ## 致谢与许可
 

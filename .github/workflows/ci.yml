@@ -14,7 +14,11 @@ jobs:
       matrix:
         node-version: [ 22.x, 24.x ]
     steps:
+      # 索引校验依赖 git log -- plugins/ 找「最后一次改动 plugins/ 的提交」，
+      # 浅克隆只会看到 HEAD，会把索引误判为不一致（main 上连续失败的原因）
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
