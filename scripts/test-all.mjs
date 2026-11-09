@@ -30,7 +30,10 @@ for (const name of plugins) {
     continue;
   }
   process.stdout.write(`- ${name}: npm test ... `);
-  const result = spawnSync("npm", ["test"], { cwd: dir, stdio: "inherit", shell: true });
+  // 同 check-all.mjs：显式 shell，避免 shell:true 的弃用警告
+  const shell = process.platform === "win32" ? "cmd.exe" : "sh";
+  const flag = process.platform === "win32" ? "/c" : "-c";
+  const result = spawnSync(shell, [flag, "npm test"], { cwd: dir, stdio: "inherit" });
   if (result.status === 0) {
     console.log("✓");
   } else {

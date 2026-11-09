@@ -39,10 +39,13 @@ for (const name of plugins) {
     continue;
   }
   process.stdout.write(`- ${name}: npm run check ... `);
-  const result = spawnSync("npm", ["run", "check"], {
+  // 显式给出 shell 可执行文件而非 shell:true：后者会触发 Node 的弃用警告，
+  // 且参数拼接在 Windows 上需要 cmd 的 /c 语义
+  const shell = process.platform === "win32" ? "cmd.exe" : "sh";
+  const flag = process.platform === "win32" ? "/c" : "-c";
+  const result = spawnSync(shell, [flag, "npm run check"], {
     cwd: dir,
     stdio: "inherit",
-    shell: true,
   });
   if (result.status === 0) {
     console.log("✓");
