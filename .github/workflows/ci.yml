@@ -14,8 +14,8 @@ jobs:
       matrix:
         node-version: [ 22.x, 24.x ]
     steps:
-      # 索引校验依赖 git log -- plugins/ 找「最后一次改动 plugins/ 的提交」，
-      # 浅克隆只会看到 HEAD，会把索引误判为不一致（main 上连续失败的原因）
+      # 索引校验要读取钉住的祖先提交（merge-base / git show），
+      # 浅克隆只看到 HEAD，会误判成「提交不存在」
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -28,6 +28,6 @@ jobs:
         run: npm run check
       - name: 单元测试
         run: npm test
-      # 索引必须与 plugins/ 一致，否则发出去的索引指向旧 commit
-      - name: 索引一致性
+      # 索引必须指向存在的祖先提交，且版本/描述与当前 package.json 一致
+      - name: 索引有效性
         run: npm run index:check
