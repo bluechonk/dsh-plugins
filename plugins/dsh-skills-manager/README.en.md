@@ -90,28 +90,14 @@ The measured values and the item-by-item comparison live in chapter 6 of [docs/D
 
 ## Install, update, remove
 
-### Option 1: paste the GitHub link on the "Plugins" page (recommended)
+This plugin lives in the `plugins/dsh-skills-manager` subdirectory of the dsh-plugins repository.
 
-The "Plugins" page has an "**+ Add plugin**" button whose dialog opens with "enter the package name, the **GitHub repository address** or a local directory path" — paste the repository link below and press Install; the UI labels it a "Git repository":
+### Option 1: plugin market index (recommended)
 
-```
-https://github.com/bluechonk/dsh-skills-manager
-```
-
-The install records the package in the profile's `dependencies` (as `github:bluechonk/dsh-skills-manager`). If the profile does not list it as a bundle yet (`dsh.profile.bundles`), add one line so the profile composes it:
-
-```json
-"dsh": { "profile": { "bundles": ["@bluechonk/dsh-skills-manager"] } }
-```
-
-Then restart DSH: "Skills" shows up in the sidebar below "Plugins", "Automations" and "Usage".
-
-### Option 2: plugin market index (browse and install with one click)
-
-This repository ships a **plugin market index** (`market-index.json`) that points at the repository's git source, pinned to a commit. Enable the market bundle once, then paste the link below into the index source field on DSH's "Settings → Plugins" page; the plugin shows up under the Discover tab and a single click installs it:
+The market index `market-index.json` sits at the root of the dsh-plugins repository and points at that repository's git source, pinned to a commit. Enable the market bundle once, then paste the link below into the index source field on DSH's "Settings → Plugins" page; the plugin shows up under the Discover tab and a single click installs it:
 
 ```
-https://raw.githubusercontent.com/bluechonk/dsh-skills-manager/main/market-index.json
+https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 ```
 
 Enable the market bundle (one time; pick a version compatible with the running DSH — the host refuses an incompatible one and names the version it expects):
@@ -120,19 +106,16 @@ Enable the market bundle (one time; pick a version compatible with the running D
 plugin_manager set_bundle --target "@deepseek-ai/dsh-experimental-plugin-market-bundle" --enabled true
 ```
 
-### Option 3: tool and command line
+### Option 2: tool and command line
 
 ```bash
 # Tool (the plugin_manager tool is available in chat)
-plugin_manager install_bundle --target "https://github.com/bluechonk/dsh-skills-manager"
-
-# Command line (forwarded to pnpm inside the profile directory)
-dsh plugin --profile desktop add "https://github.com/bluechonk/dsh-skills-manager"
+plugin_manager install_bundle --target "git+https://github.com/bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-skills-manager"
 ```
 
-The host's install-spec parser accepts a GitHub repository URL (it is a pnpm git dependency). After the install the host reads the package's `dsh.bundle.patch`, inserts the loader row, and records the package in the profile's `dsh.profile.bundles` and `dependencies`.
+`<commit>` is the one pinned in `market-index.json`; installing from an index source fills in this target for you.
 
-### Local development
+### Option 3: local directory (development)
 
 ```bash
 # Install (the host resolves dependencies and writes the profile's bundle list)
@@ -145,7 +128,9 @@ plugin_manager set_plugin --target "@bluechonk/dsh-skills-manager" --enabled tru
 plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 ```
 
-After installing, refresh the DSH page: "Skills" appears in the sidebar below "Plugins", "Automations" and "Usage". The host half takes effect with the profile; the client artifact is hot-swapped by `dsh-client-hmr` through bundle fingerprint polling — press `Ctrl+F5` if the page has been open for a long time.
+The install records the package in the profile's `dependencies` (as `github:bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-skills-manager`), reads the package's `dsh.bundle.patch`, inserts the loader row, and records the package in the profile's `dsh.profile.bundles`.
+
+Then restart DSH: "Skills" shows up in the sidebar below "Plugins", "Automations" and "Usage". After installing, refresh the page; the client artifact is hot-swapped by `dsh-client-hmr` through bundle fingerprint polling — press `Ctrl+F5` if the page has been open for a long time.
 
 ## API surface
 
@@ -175,7 +160,7 @@ Error responses carry a stable `code` (plus `params` for dynamic parts such as t
 ## Layout
 
 ```
-dsh-skills-manager/
+plugins/dsh-skills-manager/
 ├─ package.json          # dsh.bundle.patch + dsh.client{platform:web}
 ├─ cordis.patch.yml      # loader insert row (id / name are @bluechonk/dsh-skills-manager)
 ├─ lib/index.js          # host half: root resolution, discovery, routes, write operations
@@ -199,9 +184,9 @@ Design and verification details are in [docs/DESIGN-AND-VERIFICATION.md](docs/DE
 
 ## Repository
 
-- GitHub: <https://github.com/bluechonk/dsh-skills-manager>
+- Repository: <https://github.com/bluechonk/dsh-plugins>; this plugin lives in `plugins/dsh-skills-manager`.
 - Plugin identity: package name / loader row id / client module id are all `@bluechonk/dsh-skills-manager`.
-- Install with `plugin_manager install_bundle` (target = this directory); remove with `plugin_manager remove_bundle --target @bluechonk/dsh-skills-manager`.
+- Install and remove: see "Install, update, remove" above.
 
 ## Credits and license
 

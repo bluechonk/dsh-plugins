@@ -107,23 +107,30 @@ The folding semantics match the official `@deepseek-ai/dsh-token-meter` `tokenUs
 
 ## Installation
 
-### Option 1: paste the GitHub link in the UI (recommended)
+This plugin lives in the `plugins/dsh-usage-stats` subdirectory of the dsh-plugins repository.
 
-Open DSH's **Plugins** page → **Add plugin** → "Install a third-party plugin" → paste the repository address:
+### Option 1: plugin market index (recommended)
+
+The market index `market-index.json` sits at the root of the dsh-plugins repository and points at that repository's git source, pinned to a commit. Enable the market bundle once, then paste the link below into the index source field on DSH's "Settings → Plugins" page; the plugin shows up under the Discover tab and a single click installs it:
 
 ```
-https://github.com/bluechonk/dsh-usage-stats.git
+https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 ```
 
-The Host then does the rest on its own: it fetches the repository, installs it into the profile, registers the plugin as a bundle, and loads the bundle's loader declaration. **No configuration file needs editing.** When it finishes, choose **Enable now**.
-
-### Option 2: command line
+Enable the market bundle (one time; pick a version compatible with the running DSH — the host refuses an incompatible one and names the version it expects):
 
 ```bash
-dsh plugin --profile desktop add github:bluechonk/dsh-usage-stats
+plugin_manager set_bundle --target "@deepseek-ai/dsh-experimental-plugin-market-bundle" --enabled true
 ```
 
-The `plugin` subcommand comes **after** `--profile` (the other order is read as web server arguments). The desktop profile is managed exclusively by the Electron application, so the command line cannot reach it — use option 1 there.
+### Option 2: tool and command line
+
+```bash
+# Tool (the plugin_manager tool is available in chat)
+plugin_manager install_bundle --target "git+https://github.com/bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-usage-stats"
+```
+
+`<commit>` is the one pinned in `market-index.json`; installing from an index source fills in this target for you.
 
 ### Option 3: local directory (for development)
 
@@ -191,7 +198,7 @@ The host half registers same-origin routes on `ctx.webServer` (all guarded by a 
 ## Repository layout
 
 ```
-dsh-usage-stats/
+plugins/dsh-usage-stats/
 ├─ package.json          # dsh.bundle.patch + dsh.client
 ├─ cordis.patch.yml      # loader insertion row (id / name)
 ├─ lib/index.js          # host half: event collection, backfill, routes, lock
@@ -230,12 +237,12 @@ See [docs/design-and-verification.md](docs/design-and-verification.md) for the d
 
 ## Repository
 
-- GitHub: <https://github.com/bluechonk/dsh-usage-stats>
+- Repository: <https://github.com/bluechonk/dsh-plugins>; this plugin lives in `plugins/dsh-usage-stats`.
 - Plugin identity: npm package name `@bluechonk/dsh-usage-stats`, loader row id `dsh-usage-stats`.
 
 ## Versioning
 
-**A self-use plugin, iterating on `0.1.x`**: the interfaces and data shapes are not settled yet, so no compatibility promise is made; `0.2.0` is reserved for an incompatible interface revision. It is **not published to npm** — installation goes through the GitHub link only (`package.json` is marked `private: true`).
+**A self-use plugin, iterating on `0.1.x`**: the interfaces and data shapes are not settled yet, so no compatibility promise is made; `0.2.0` is reserved for an incompatible interface revision. It is **not published to npm** — installation goes through the plugin market index only (`package.json` is marked `private: true`).
 
 See [CHANGELOG.md](CHANGELOG.md) for the version history.
 

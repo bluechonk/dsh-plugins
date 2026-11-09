@@ -56,8 +56,8 @@
 ### 安装
 
 - 包名 / loader 行 id / client 模块 id 统一为 `@bluechonk/dsh-skills-manager`。
-- 仓库自带插件市场索引 `market-index.json`（git 源，锁定 commit）。
-- 宿主安装规格解析器接受 GitHub 仓库 URL，装完读 `dsh.bundle.patch` 自动插入 loader 行。
+- 随 dsh-plugins 仓库分发，市场索引 `market-index.json` 位于仓库根目录（git 源，锁定 commit）。
+- 宿主安装规格解析器接受 git 源地址（含 `&path:` 子目录），装完读 `dsh.bundle.patch` 自动插入 loader 行。
 
 ### 验证
 

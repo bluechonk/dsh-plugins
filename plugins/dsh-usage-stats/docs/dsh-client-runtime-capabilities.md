@@ -1,10 +1,10 @@
 # DSH Web 客户端插件运行时能力调研报告
 
-> **本文性质**：对 **DSH 宿主本身**的能力调研，不是本插件的实现说明。内容随宿主版本走，与本仓库的改版无关；宿主升级后需重新核对标注的版本号。
+> **本文性质**：对 **DSH 宿主本身**的能力调研，不是本插件的实现说明。内容随宿主版本走，与插件改版无关；宿主升级后需重新核对标注的版本号。
 >
 > **调研动机**：本插件（`@bluechonk/dsh-usage-stats`）要在侧边栏渲染「使用统计」看板（热力图 / 折线 / 环形图全部手绘 SVG），必须先摸清宿主提供什么——尤其是「有没有现成图表库」（结论：没有）与「CSS 变量怎么取」（结论：只用 `--dsw-alias-*`）。
 >
-> **对本仓库的直接影响**：
+> **对本插件的直接影响**：
 > - 图表全部自绘 SVG，故 `lib/client.js` 零第三方依赖；
 > - 样式用自有的 `--dus-*` 变量表（挂在 `body` / `body[data-ds-dark-theme]` 两档）跟随宿主主题；
 > - 面板是侧边栏独立模块：导航行注册在 `sidebar.panellist`（`order: 20`），页面注册在 `main`（`key: usage-stats`），标题自己画（宿主不给页面页头，也不给内边距与滚动）。
@@ -529,4 +529,4 @@ jsx(IconSettingsOutlineMedium, { className: navIcon, size: 16 })
 ## 附：调研用到的解包方法
 
 asar header：`headerSize = buf.readUInt32LE(12)`，header JSON 在偏移 16，文件内容基址 = `16 + headerSize`。
-临时脚本目录：`dsh-usage-stats/.tmp/`（已 gitignore），产物：`unpack-asar.cjs` `unpack-filtered.cjs` `ls-header.cjs` `css-vars.cjs` `js-vars.cjs` `slots-scan.cjs` `inject-scan.cjs` `requires-scan.cjs` `export-list.cjs`。
+临时脚本目录：仓库根 `.tmp/`（已 gitignore），产物：`unpack-asar.cjs` `unpack-filtered.cjs` `ls-header.cjs` `css-vars.cjs` `js-vars.cjs` `slots-scan.cjs` `inject-scan.cjs` `requires-scan.cjs` `export-list.cjs`。
