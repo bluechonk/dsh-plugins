@@ -89,31 +89,15 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 ## 安装、更新、卸载
 
-### 方式一：在「插件」页粘贴 GitHub 链接（推荐）
+本插件是 dsh-plugins 仓库的子目录 `plugins/dsh-skills-manager`。
 
-DSH 的「插件」页右上角有「**+ 添加插件**」，弹窗第一行就写着「输入插件的包名、**GitHub 仓库地址**或本地目录路径」——
-把下面的仓库链接粘进去点「安装」即可，界面会把它识别为「Git 仓库」：
+### 方式一：插件市场索引（推荐）
 
-```
-https://github.com/bluechonk/dsh-skills-manager
-```
-
-装完宿主会把包写进 profile 的 `dependencies`（值为 `github:bluechonk/dsh-skills-manager`）。
-若该 profile 还没把它列为 bundle（`dsh.profile.bundles`），补一行即可随 profile 生效：
-
-```json
-"dsh": { "profile": { "bundles": ["@bluechonk/dsh-skills-manager"] } }
-```
-
-然后重启 DSH，侧边栏「插件」「自动化任务」「使用统计」下方就会出现「技能」。
-
-### 方式二：插件市场索引（可浏览、可一键安装）
-
-本仓库自带**插件市场索引** `market-index.json`（指向本仓库的 git 源，锁定 commit）。启用市场 bundle 后，
-在 DSH「设置 → 插件」页的索引源输入框粘贴下面这条 GitHub 链接，Discover 标签里就会出现本插件，点「安装」即可：
+市场索引 `market-index.json` 位于 dsh-plugins 仓库根目录，指向 dsh-plugins 仓库的 git 源并锁定 commit。启用市场 bundle 后，
+在 DSH「设置 → 插件」页的索引源输入框粘贴下面这条地址，Discover 标签里就会出现本插件，点「安装」即可：
 
 ```
-https://raw.githubusercontent.com/bluechonk/dsh-skills-manager/main/market-index.json
+https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 ```
 
 启用市场 bundle（一次性；注意版本要与当前 DSH 运行时兼容，不兼容时宿主会拒绝启用并提示对应版本）：
@@ -122,20 +106,16 @@ https://raw.githubusercontent.com/bluechonk/dsh-skills-manager/main/market-index
 plugin_manager set_bundle --target "@deepseek-ai/dsh-experimental-plugin-market-bundle" --enabled true
 ```
 
-### 方式三：工具与命令行
+### 方式二：命令行 / 工具
 
 ```bash
 # 工具（对话里可用 plugin_manager 工具）
-plugin_manager install_bundle --target "https://github.com/bluechonk/dsh-skills-manager"
-
-# 命令行（转发给 profile 目录里的 pnpm）
-dsh plugin --profile desktop add "https://github.com/bluechonk/dsh-skills-manager"
+plugin_manager install_bundle --target "git+https://github.com/bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-skills-manager"
 ```
 
-宿主的安装规格解析器接受 GitHub 仓库 URL（等价于 pnpm 的 git 依赖），装完读取本包的 `dsh.bundle.patch`
-自动插入 loader 行，并把包名写进 profile 的 `dsh.profile.bundles` 与 `dependencies`。
+`<commit>` 取 `market-index.json` 里锁定的提交；用索引源安装时宿主会自动带上这个 target，不用手填。
 
-### 本地开发
+### 方式三：本地目录（开发用）
 
 ```bash
 # 安装（宿主负责解析依赖并写入 profile 的 bundles 列表）
@@ -148,7 +128,10 @@ plugin_manager set_plugin --target "@bluechonk/dsh-skills-manager" --enabled tru
 plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 ```
 
-安装后刷新 DSH 页面，侧边栏「插件」「自动化任务」「使用统计」下方就会出现「技能」。宿主半随 profile 生效，客户端产物由 `dsh-client-hmr` 的 bundle 指纹轮询热替换；页面长时间未刷新时手动 `Ctrl+F5` 即可。
+装完宿主会把包写进 profile 的 `dependencies`（值为 `github:bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-skills-manager`），
+并读取本包的 `dsh.bundle.patch` 自动插入 loader 行、把包名写进 `dsh.profile.bundles`。
+
+然后重启 DSH，侧边栏「插件」「自动化任务」「使用统计」下方就会出现「技能」。安装后刷新页面即可，客户端产物由 `dsh-client-hmr` 的 bundle 指纹轮询热替换；页面长时间未刷新时手动 `Ctrl+F5` 即可。
 
 ## 数据通道
 
@@ -175,7 +158,7 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 ## 目录结构
 
 ```
-dsh-skills-manager/
+plugins/dsh-skills-manager/
 ├─ package.json          # dsh.bundle.patch + dsh.client{platform:web}
 ├─ cordis.patch.yml      # loader 插入行（id / name 均为 @bluechonk/dsh-skills-manager）
 ├─ lib/index.js          # host 半：根解析、扫描、路由、写操作
@@ -195,31 +178,25 @@ npm test          # node:test 单测（67 项：frontmatter / 根解析 / 目录
 npm run check     # 语法检查（lib 与 client）
 ```
 
-推送前有门禁：`.githooks/pre-push` 会在 WSL（Ubuntu）里跑与 CI 等价的 `npm run check && npm test`，
-不通过就中止推送（换机器克隆后需 `git config core.hooksPath .githooks` 重新启用）。
+推送门禁在 dsh-plugins 仓库根目录：`.githooks/pre-push` 会在 WSL（Ubuntu）里跑与 CI 等价的 `npm run check && npm test`，
+不通过就中止推送（换机器克隆后需 `npm run hooks:install` 重新启用）。
 
 设计与验证细节见 [docs/DESIGN-AND-VERIFICATION.md](docs/DESIGN-AND-VERIFICATION.md)（含代码评审与修复记录），
 翻译功能的核心实现与设计理念见 [docs/TRANSLATION.md](docs/TRANSLATION.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 版本
 
-| 版本 | 标签 | 要点 |
-|---|---|---|
-| 0.1.0 | `v0.1.0` | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、启停、导入、删除 |
+| 版本 | 要点 |
+|---|---|
+| 0.1.0 | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、启停、导入、删除 |
 
 发版节奏：一批用户可见的改动发一个版本，不随单次提交发版。详单见 [CHANGELOG.md](CHANGELOG.md)。
 
-装指定版本：
-
-```bash
-plugin_manager install_bundle --target "https://github.com/bluechonk/dsh-skills-manager#v0.1.0"
-```
-
 ## 仓库
 
-- GitHub：<https://github.com/bluechonk/dsh-skills-manager>
+- 所在仓库：<https://github.com/bluechonk/dsh-plugins>，本插件位于 `plugins/dsh-skills-manager`。
 - 插件标识：包名 / loader 行 id / client 模块 id 统一为 `@bluechonk/dsh-skills-manager`。
-- 安装：`plugin_manager install_bundle`，target 指向本目录；卸载：`plugin_manager remove_bundle --target @bluechonk/dsh-skills-manager`。
+- 安装与卸载见上文「安装、更新、卸载」。
 
 ## 致谢与许可
 

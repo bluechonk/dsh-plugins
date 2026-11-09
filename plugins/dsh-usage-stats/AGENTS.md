@@ -43,12 +43,12 @@ icon.svg、cordis.patch.yml、package.json
 ## 版本与发版
 
 - 版本策略：`0.1.x` 自用迭代，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。
-- 不发布到 npm，只经 GitHub 链接安装。
-- **没有明确要求就不发版**：日常改代码既不 bump 版本号、也不打 tag——**不要每合一个 PR 就打一个 tag**。
-  未发版的改动在 `CHANGELOG.md` 顶部「未发布」段里累积。
-- 发版只在用户明确说「发版 / 打 tag / 出个版本」时做：`npm run check` + `npm test` 全绿 → 把「未发布」段
-  定版为 `0.1.x` 并 bump 版本号 → 分支 + PR → 合并 → 在合并后的 `main` 上打 tag（`git tag -a vX.Y.Z`）。
-- `0.1.x` 连续递增不跳号；**发版 = 打 tag，不建 GitHub Release**（本仓库惯例）。
+- 不发布到 npm，只经 dsh-plugins 的插件市场索引安装。
+- **没有明确要求就不发版**：日常改代码既不 bump 版本号、也不打 tag；未发版的改动在 `CHANGELOG.md` 顶部「未发布」段里累积。
+- 发版只在用户明确说「发版 / 出个版本」时做：`npm run check` + `npm test` 全绿 → 把「未发布」段定版为 `0.1.x`
+  并 bump 版本号 → 走 dsh-plugins 的 PR 流程合入。
+- `0.1.x` 连续递增不跳号；版本以 `package.json` 与 `CHANGELOG.md` 为准，索引里的版本号由仓库根的
+  `scripts/sync-index.mjs` 从 `package.json` 读取。
 
 ## 真机验证（唯一路径：dsh web + agent-browser）
 
@@ -101,19 +101,13 @@ node scripts/verify-dsh-web.mjs stop                          # 停实例 + 删�
 
 注意：不要改写**已经推送**的历史（那需要 force-push，也会让 tag 与提交脱节）；需要调整就新开分支。
 
-### 仓库设置（已在 GitHub 上生效）
+### 仓库设置
 
-- 仓库**公开**（`bluechonk/dsh-usage-stats`）；公开后免费额度即可用分支保护，无需退回 `pre-push` 钩子方案。
-- 合并方式：**只允许 Squash**（`allow_merge_commit` / `allow_rebase_merge` 均关闭），合并后自动删分支，
-  squash 提交标题取 PR 标题、正文取 PR 正文。
-- `main` 分支保护：**必须走 PR**（直推被 `GH006` 拒绝）、**管理员同样受限**、要求线性历史（禁 merge commit）、
-  禁 force push、禁删除分支、必须解决全部对话。
-- 审批数暂为 0：个人仓库无法给自己的 PR 批准，设 1 会把所有合并堵死；有多账号协作需求时再改。
-- 改这些设置的命令见提交历史（`gh api -X PATCH repos/…` 与 `branches/main/protection`）。
+插件位于 dsh-plugins 仓库的 `plugins/dsh-usage-stats` 子目录，仓库级设置（分支保护、合并策略、CI、推送钩子）
+由仓库根目录统一管理，见根 `README.md` 的「分支与合并」与 `.github/`。
 
 ## 禁止
 
 - 不提交 token / 凭据（包括 dsh web 地址里的 token）。
-- 不建 GitHub Release（本仓库惯例：只打 tag）。
-- 不发布到 npm。
+- 不发布到 npm，也不建 GitHub Release。
 - 不为了验证去重启或改配置正在运行的 desktop 实例。

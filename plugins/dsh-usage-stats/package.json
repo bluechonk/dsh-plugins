@@ -55,11 +55,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bluechonk/dsh-usage-stats.git"
+    "url": "git+https://github.com/bluechonk/dsh-plugins.git",
+    "directory": "plugins/dsh-usage-stats"
   },
-  "homepage": "https://github.com/bluechonk/dsh-usage-stats#readme",
+  "homepage": "https://github.com/bluechonk/dsh-plugins/tree/main/plugins/dsh-usage-stats#readme",
   "bugs": {
-    "url": "https://github.com/bluechonk/dsh-usage-stats/issues"
+    "url": "https://github.com/bluechonk/dsh-plugins/issues"
   },
   "author": "BlueChonk",
   "license": "MIT",

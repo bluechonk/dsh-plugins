@@ -2,9 +2,9 @@
 
 本文件记录 dsh-usage-stats 的版本变更。
 
-本项目源自社区插件的 MIT 许可实现（早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)，看板实现基于 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)），本仓库在其基础上重做了看板。版权声明见 [LICENSE](LICENSE)，来源与致谢见 [README](README.md#致谢与许可)。
+本项目源自社区插件的 MIT 许可实现（早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)，看板实现基于 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)），本插件在其基础上重做了看板。版权声明见 [LICENSE](LICENSE)，来源与致谢见 [README](README.md#致谢与许可)。
 
-**版本策略**：自用插件，走 `0.1.x` 迭代——接口与数据结构未稳定，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。不发布到 npm，只经 GitHub 链接安装。**没有明确要求不发版**：日常改代码既不 bump 版本号也不打 tag，未发布的改动先攒在本文件顶部的「未发布」段；**发版 = 在合并后的 `main` 上打 tag，不建 GitHub Release**（版本以 tag + 本文件为准）。
+**版本策略**：自用插件，走 `0.1.x` 迭代——接口与数据结构未稳定，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。不发布到 npm，只经 dsh-plugins 的插件市场索引安装。**没有明确要求不发版**：日常改代码既不 bump 版本号也不打 tag，未发布的改动先攒在本文件顶部的「未发布」段；**发版 = 在 dsh-plugins 走 PR 合入并 bump 版本号**（版本以 `package.json` 与本文件为准）。
 
 ## 0.1.0
 
@@ -56,4 +56,4 @@
 
 - 文档中文化、文件名英文：`docs/design-and-verification.md`、`docs/audit-report.md`、`docs/dsh-client-runtime-capabilities.md`、`docs/images/`。
 - 可执行脚本集中在 `scripts/`，`docs/` 只放文档与图片；临时脚本与中间产物入 `.tmp/`（已忽略，一律保留）。
-- 仓库公开，`main` 分支保护：必须走 PR、管理员同样受限、仅允许 Squash 合并、要求线性历史、禁 force push 与删除分支。
+- 随 dsh-plugins 仓库分发；仓库公开，`main` 分支保护：必须走 PR、管理员同样受限、仅允许 Squash 合并、要求线性历史、禁 force push 与删除分支。

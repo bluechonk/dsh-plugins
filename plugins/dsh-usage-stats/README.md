@@ -107,23 +107,31 @@ loader 行 id 与 client 模块 id **不共用**：`cordis.patch.yml` 的 `id` �
 
 ## 安装
 
-### 方式一：界面里输入 GitHub 链接（推荐）
+本插件是 dsh-plugins 仓库的子目录 `plugins/dsh-usage-stats`。
 
-打开 DSH 的**插件**页 → 右上角 **添加插件** → 选「安装第三方插件」→ 在输入框粘贴仓库地址：
+### 方式一：插件市场索引（推荐）
+
+市场索引 `market-index.json` 位于 dsh-plugins 仓库根目录，指向 dsh-plugins 仓库的 git 源并锁定 commit。启用市场 bundle 后，
+在 DSH「设置 → 插件」页的索引源输入框粘贴下面这条地址，Discover 标签里就会出现本插件，点「安装」即可：
 
 ```
-https://github.com/bluechonk/dsh-usage-stats.git
+https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/market-index.json
 ```
 
-确认后宿主会自行完成：拉取仓库、装进 profile、把本插件登记为 bundle 并加载它的 loader 声明，装完可点「立即启用」。**无需手动改任何配置文件。**
-
-### 方式二：命令行
+启用市场 bundle（一次性；注意版本要与当前 DSH 运行时兼容，不兼容时宿主会拒绝启用并提示对应版本）：
 
 ```bash
-dsh plugin --profile desktop add github:bluechonk/dsh-usage-stats
+plugin_manager set_bundle --target "@deepseek-ai/dsh-experimental-plugin-market-bundle" --enabled true
 ```
 
-`plugin` 子命令在 `--profile` **之后**（顺序反了会被当成 web 服务器参数）。桌面端 profile 由 Electron 独占，命令行不可用，请走方式一。
+### 方式二：命令行 / 工具
+
+```bash
+# 工具（对话里可用 plugin_manager 工具）
+plugin_manager install_bundle --target "git+https://github.com/bluechonk/dsh-plugins#<commit>&path:/plugins/dsh-usage-stats"
+```
+
+`<commit>` 取 `market-index.json` 里锁定的提交；用索引源安装时宿主会自动带上这个 target，不用手填。
 
 ### 方式三：本地目录（开发用）
 
@@ -191,7 +199,7 @@ ln -s <本目录绝对路径> ~/.dsh/profiles/desktop/node_modules/@bluechonk/ds
 ## 目录结构
 
 ```
-dsh-usage-stats/
+plugins/dsh-usage-stats/
 ├─ package.json          # dsh.bundle.patch + dsh.client
 ├─ cordis.patch.yml      # loader 插入行（id / name）
 ├─ lib/index.js          # host 半：事件采集、回填、路由、锁
@@ -230,12 +238,12 @@ npm run verify:ui    # 真机 UI 冒烟：驱动真实浏览器打开侧边栏�
 
 ## 仓库
 
-- GitHub：<https://github.com/bluechonk/dsh-usage-stats>
+- 所在仓库：<https://github.com/bluechonk/dsh-plugins>，本插件位于 `plugins/dsh-usage-stats`。
 - 插件标识：npm 包名 `@bluechonk/dsh-usage-stats`，loader 行 id `dsh-usage-stats`。
 
 ## 版本
 
-**自用插件，走 `0.1.x` 迭代**：接口与数据结构尚未稳定，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。**不发布到 npm**，只经 GitHub 链接安装（`package.json` 标了 `private: true`）。
+**自用插件，走 `0.1.x` 迭代**：接口与数据结构尚未稳定，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。**不发布到 npm**，只经插件市场索引安装（`package.json` 标了 `private: true`）。
 
 版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -253,6 +261,6 @@ npm run verify:ui    # 真机 UI 冒烟：驱动真实浏览器打开侧边栏�
 - 界面形态参考 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）的「使用统计」面板设计，配色取其 CSS 变量真值。
 - 采集与折叠语义对齐官方 `@deepseek-ai/dsh-token-meter` 的 `tokenUsage` 投影。
 - 看板实现基于 [axuan-1314/dsh-usage-stats](https://github.com/axuan-1314/dsh-usage-stats)（MIT）。
-- 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本仓库在此基础上重做了看板。
+- 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本插件在此基础上重做了看板。
 
 MIT License，见 [LICENSE](LICENSE)。
