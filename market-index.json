@@ -28,11 +28,11 @@
 			"versions": [
 				{
 					"version": "0.1.1",
-					"publishTimestamp": 1794478084,
+					"publishTimestamp": 1794478201,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "52b93284e0dceff8f08fbac91107bc91ef790ec3",
+						"commit": "f223844ef4d00f5677d0e154987817b057519ec4",
 						"path": "plugins/dsh-skills-manager"
 					}
 				}
@@ -61,7 +61,7 @@
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "52b93284e0dceff8f08fbac91107bc91ef790ec3",
+						"commit": "f223844ef4d00f5677d0e154987817b057519ec4",
 						"path": "plugins/dsh-usage-stats"
 					}
 				}
