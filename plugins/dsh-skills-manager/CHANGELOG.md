@@ -2,7 +2,9 @@
 
 本文件记录 dsh-skills-manager 的版本变更。
 
-## 未发布
+## 0.1.1
+
+界面调整：去掉启用 / 停用开关与「导入外部 Agent 技能」，翻译改为分段按钮，搜索实时过滤，内置技能正文从注册表读取。
 
 - 去掉技能的启用 / 停用开关：列表行不再有开关，详情弹窗不再显示「已启用 / 已禁用」，
   `/toggle` 路由与 frontmatter 的 `disable-model-invocation` / `user-invocable` 改写逻辑一并移除。
