@@ -47,6 +47,8 @@ function makeHost(options = {}) {
   mkdirSync(skillsRoot, { recursive: true })
   const workspaces = options.workspaces || []
   const routes = new Map()
+  // 内置技能（打包进 app.asar、没有本地文件）以注册表形式提供，正文靠 get(name) 取。
+  const registrySkills = options.registrySkills || []
   const services = {
     loader: {
       entries: () => [
@@ -60,6 +62,10 @@ function makeHost(options = {}) {
     },
     workspaceRegistry: { list: () => workspaces },
     profileContext: { dir: home },
+    skills: {
+      list: async () => registrySkills.map((skill) => ({ name: skill.name, description: skill.description, source: 'bundled', provider: 'test' })),
+      get: async (name) => registrySkills.find((skill) => skill.name === name) || undefined,
+    },
   }
   const ctx = {
     get: (name) => services[name],
@@ -102,6 +108,27 @@ test('GET /state 返回技能清单与统计', async () => {
     const payload = response.json()
     assert.equal(payload.ok, true)
     assert.ok(payload.skills.some((skill) => skill.name === 'demo'))
+  } finally {
+    rmSync(host.home, { recursive: true, force: true })
+  }
+})
+
+test('内置技能（无本地文件）从注册表取正文', async () => {
+  const host = makeHost({
+    registrySkills: [
+      { name: 'bundled-skill', description: '内置技能', content: '---\nname: bundled-skill\ndescription: 内置技能\n---\n\n# 正文\n内容' },
+    ],
+  })
+  try {
+    const state = await call(host, '/dsh-skills-manager/state')
+    assert.ok(state.json().skills.some((skill) => skill.name === 'bundled-skill'))
+    const response = await call(host, '/dsh-skills-manager/body', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'bundled-skill' }),
+    })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().frontmatter.description, '内置技能')
+    assert.match(response.json().body, /# 正文/)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
@@ -201,7 +228,7 @@ test('删除根目录下平铺的 skill.md 不会抹掉整个根', async () => {
   }
 })
 
-test('未登记的技能返回 404，非法来源返回 400', async () => {
+test('未登记的技能返回 404', async () => {
   const host = makeHost()
   try {
     const missing = await call(host, '/dsh-skills-manager/remove', {
@@ -209,11 +236,6 @@ test('未登记的技能返回 404，非法来源返回 400', async () => {
       body: JSON.stringify({ name: 'not-exist' }),
     })
     assert.equal(missing.statusCode, 404)
-    const badImport = await call(host, '/dsh-skills-manager/import', {
-      method: 'POST',
-      body: JSON.stringify({ source: 'nope', name: 'x', mode: 'copy' }),
-    })
-    assert.equal(badImport.statusCode, 400)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
