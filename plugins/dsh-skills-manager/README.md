@@ -8,7 +8,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 ![侧边栏技能面板](docs/images/01-sidebar-skills-panel.png)
 
-点开导航行后是完整面板（作用域切换、搜索、详情弹窗、导入外部技能）：
+点开导航行后是完整面板（作用域切换、搜索、详情弹窗）：
 
 ![技能主面板](docs/images/10-skills-main-panel.png)
 
@@ -34,20 +34,16 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 | 搜索 | 按名称、描述、路径实时过滤 |
 | 已安装列表 | 名称 + 描述 + 删除按钮；删除只允许落在受管根之下 |
 | 兼容性提示 | DSH 要求 frontmatter 同时有 `name` 与 `description`，且不含旧式调用键——不满足的技能标「DSH 不加载」（这类文件会被宿主整个忽略） |
-| 内置分组 | 运行时注册与随包内置的技能只读展示，按来源分组 |
-| 导入按钮 | 列表右上角「导入」按钮：来源覆盖 ZCode / Codex CLI / Claude Code，来源可展开，逐个技能展示名称与描述，可单选或整源勾选；复制导入会自动补齐缺失的 description 并移除旧式调用键 |
+| 内置分组 | 运行时注册与随包内置的技能只读展示，按来源分组；**内置技能的正文从宿主注册表读取**（打包在 `app.asar` 里的技能没有本地文件） |
+| 搜索 | 随输入实时过滤（名称 / 描述 / 路径 / 来源），不用回车；有内容时右侧出现清除按钮 |
 | 详情弹窗 | 标题 +「Skill」徽章；描述（frontmatter 的 `description`，Markdown 渲染）；**文件内容**（SKILL.md 正文，Markdown 渲染的滚动卡片，形态对齐 Codex 技能页）；范围（个人 / 项目名 / 内置）、文件路径（行内等宽路径 + 复制图标） |
-| 翻译 | 详情弹窗默认开启翻译：**描述与正文**自动译成中文（技能名是标识符，不翻译），Markdown 结构与代码块保留；可点「看原文」对照，也可用标题栏的「翻译」按钮整体关掉。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道），未启用 `dsh-experimental-cot-translation-bundle` 时提示不可用并退回原文 |
+| 翻译 | 标题栏一个 `[原文 | 译文]` 分段按钮，**默认原文**，每次打开详情都从原文开始（不持久化）。切到「译文」才翻译**描述与正文**（技能名是标识符，不翻译），Markdown 结构与代码块保留。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道）；翻译中或失败时在小字提示条里说明，未启用 `dsh-experimental-cot-translation-bundle` 时提示不可用并退回原文 |
 
 ![技能详情弹窗](docs/images/02-skill-detail-dialog.png)
 
 翻译后的详情弹窗（描述与正文均为中文，可切回原文）：
 
 ![技能详情翻译](docs/images/11-skill-detail-translation.png)
-
-导入按钮与导入弹窗：
-
-![导入外部 Agent 技能](docs/images/04-import-external-agent-skills.png)
 
 作用域下拉：
 
@@ -141,15 +137,12 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 | POST | `/dsh-skills-manager/body` | 单个技能的 frontmatter、正文、文件清单 |
 | POST | `/dsh-skills-manager/reveal` | 在系统文件管理器中打开技能目录 |
 | POST | `/dsh-skills-manager/remove` | 删除受管根下的技能 |
-| POST | `/dsh-skills-manager/import` | 从外部目录导入（软链 / 复制） |
-| GET | `/dsh-skills-manager/external` | 外部 Agent 技能目录扫描 |
 
 ## 安全与边界
 
 - 写操作的目标一律由宿主按「已扫描到的技能」反查得到，**不接受客户端传入的任意绝对路径**；项目落点只认已登记工作区。
 - 删除仅限受管根（`user-dsh` / `user-agents` / `project-dsh` / `project-agents`）；软链只删链接不删源；删除前校验目标不等于受管根本身；界面上有二次确认并列出路径。
 - 官方包内置技能（`node_modules` 内，按真实路径判定）拒绝改写与删除，避免破坏官方包。
-- 导入的复制模式只改写落地副本，不动源目录；非 UTF-8（如 GBK）编码的文件跳过归一化，避免内容被写成乱码。
 - 插件不写任何持久化数据，仅在 profile 目录留一份 `skills-manager.log` 审计日志；不联网、不上传。
 
 ## 目录结构
@@ -161,7 +154,7 @@ plugins/dsh-skills-manager/
 ├─ lib/index.js          # host 半：根解析、扫描、路由、写操作
 ├─ lib/roots.js          # 根解析与项目根探测（纯函数）
 ├─ lib/frontmatter.js    # frontmatter 解析与调用策略（两个键）改写（纯函数）
-├─ client/client.js      # client 半：侧边栏导航行 + 主面板 + 详情/导入弹窗
+├─ client/client.js      # client 半：侧边栏导航行 + 主面板 + 详情弹窗
 ├─ locale/{en,zh}.json   # 插件管理器元数据（meta.title / meta.description）
 ├─ icon.svg              # 原创图标
 ├─ docs/                 # 设计与验证记录、实机截图、变更记录
@@ -171,7 +164,7 @@ plugins/dsh-skills-manager/
 ## 开发
 
 ```bash
-npm test          # node:test 单测（55 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 客户端纯函数 / i18n）
+npm test          # node:test 单测（54 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 客户端纯函数 / i18n）
 npm run check     # 语法检查（lib 与 client）
 ```
 
@@ -185,7 +178,7 @@ npm run check     # 语法检查（lib 与 client）
 
 | 版本 | 要点 |
 |---|---|
-| 0.1.0 | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、导入、删除 |
+| 0.1.0 | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、删除 |
 
 发版节奏：一批用户可见的改动发一个版本，不随单次提交发版。详单见 [CHANGELOG.md](CHANGELOG.md)。
 

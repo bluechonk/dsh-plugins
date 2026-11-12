@@ -11,15 +11,12 @@
 // 派生自 pengxiaozi/dsh-plugins 的 dsh-skill-panel（MIT），此处在其只读能力之上补齐
 // 范围切换与写操作，并重写为独立实现。
 
-import { appendFileSync, closeSync, copyFileSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, cpSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import { homedir } from 'node:os'
 
 import {
   diagnoseFrontmatter,
-  isLosslessUtf8,
   isValidSkillName,
-  normalizeSkillFrontmatter,
   parseFrontmatter,
 } from './frontmatter.js'
 import {
@@ -345,64 +342,6 @@ function readTextHead(path, limit) {
       }
     }
   }
-}
-
-/** 已知的外部 Agent 技能目录（用于「导入外部 Agent 技能」）。 */
-export function externalAgentRoots(home = homedir()) {
-  return [
-    { id: 'zcode', label: 'ZCode', path: join(home, '.zcode', 'skills') },
-    { id: 'codex', label: 'Codex CLI', path: join(home, '.codex', 'skills') },
-    { id: 'claude', label: 'Claude Code', path: join(home, '.claude', 'skills') },
-  ]
-}
-
-/** 扫描外部目录，返回可导入的技能清单。 */
-export function scanExternalRoots(roots) {
-  const out = []
-  for (const root of roots) {
-    let names
-    try {
-      names = readdirSync(root.path)
-    } catch {
-      out.push({ id: root.id, label: root.label, path: root.path, exists: false, count: 0, skills: [] })
-      continue
-    }
-    names.sort()
-    const skills = []
-    for (const entry of names) {
-      if (entry.startsWith('.')) continue
-      const abs = join(root.path, entry)
-      let st
-      try {
-        st = lstatSync(abs)
-      } catch {
-        continue
-      }
-      const isBundle = st.isDirectory()
-      const mdPath = isBundle ? join(abs, 'SKILL.md') : st.isFile() && entry.toLowerCase().endsWith('.md') ? abs : null
-      if (!mdPath || !existsSync(mdPath)) continue
-      const text = readTextHead(mdPath, 65536)
-      if (text === null) continue
-      const frontmatter = parseFrontmatter(text)
-      if (!frontmatter || !isValidSkillName(frontmatter.data.name)) continue
-      const externalIssues = diagnoseFrontmatter(frontmatter).issues
-      skills.push({
-        name: frontmatter.data.name,
-        description: typeof frontmatter.data.description === 'string' ? frontmatter.data.description : '',
-        // 外部技能同样要过 DSH 的规则：没 description 的技能导入了也不会被加载。
-        issues: externalIssues,
-        loadable: externalIssues.length === 0,
-        path: mdPath,
-        // 技能自己的目录：导入时用它做链接/复制目标。
-        // 平铺 .md 的 dirname 是整个外部根，用它会把整个外部目录装进来。
-        dir: isBundle ? abs : dirname(abs),
-        isBundle,
-        isFlat: !isBundle,
-      })
-    }
-    out.push({ id: root.id, label: root.label, path: root.path, exists: true, count: skills.length, skills })
-  }
-  return out
 }
 
 /* ------------------------------------------------------------------ */
@@ -819,16 +758,6 @@ export function apply(ctx, config = {}) {
     return hit ? hit.path : ''
   }
 
-  /** 写操作的落点根：全局根固定；项目根必须来自已登记工作区。 */
-  const writeTargetRoot = (target, cwd) => {
-    const configured = filesystemConfig()
-    const dshHome = typeof configured.dshHome === 'string' ? configured.dshHome : process.env.DSH_HOME || join(homedir(), '.dsh')
-    if (target !== 'project') return join(dshHome, 'skills')
-    const projectRoot = projectRootsFor(cwd).find((root) => root.label === 'project-dsh')
-    if (!projectRoot || cwd === '') return null
-    return projectRoot.path
-  }
-
   /** 依赖包目录内的技能（预设内置）不可写——改坏会连累官方包。 */
   const insideNodeModules = (target) => {
     if (typeof target !== 'string') return false
@@ -880,10 +809,23 @@ export function apply(ctx, config = {}) {
     })
   }
 
+  /** 内置技能（打包在 app.asar、没有本地文件）的正文从宿主注册表按名加载。 */
+  const loadEmbeddedSkill = async (name, cwd) => {
+    const registry = ctx.get('skills')
+    if (!registry || typeof registry.get !== 'function') return null
+    try {
+      return await registry.get(name, cwd ? { cwd } : {})
+    } catch (error) {
+      log('registry.get failed for ' + name + ': ' + String(error && error.message ? error.message : error))
+      return null
+    }
+  }
+
   const bodyRoute = async (request, response) => {
     const payload = await readJsonBody(request)
     const name = typeof payload.name === 'string' ? payload.name : ''
-    const { skills } = await listSkills(resolveCwd(payload.cwd))
+    const cwd = resolveCwd(payload.cwd)
+    const { skills } = await listSkills(cwd)
     const skill = findSkill(skills, name)
     if (!skill) return sendError(response, 404, '找不到技能：' + name, undefined, 'skill-not-found', { name })
     let content = ''
@@ -892,9 +834,16 @@ export function apply(ctx, config = {}) {
       // 只读头部：超大 SKILL.md 不必整file读进内存。
       content = readTextHead(skill.path, CONTENT_PREVIEW_BYTES) || ''
       truncated = Buffer.byteLength(content, 'utf8') >= CONTENT_PREVIEW_BYTES
+    } else if (skill.embedded) {
+      // 内置技能（如 dsh-office、dsh-sandbox-windows-acl）没有本地文件，正文在注册表里。
+      const full = await loadEmbeddedSkill(name, cwd)
+      if (full && typeof full.content === 'string') {
+        content = full.content.slice(0, CONTENT_PREVIEW_BYTES)
+        truncated = Buffer.byteLength(full.content, 'utf8') > CONTENT_PREVIEW_BYTES
+      }
     }
     const info = skill.path ? collectSkillFiles(skill.path) : null
-    const frontmatter = skill.path ? parseFrontmatter(content) : null
+    const frontmatter = content ? parseFrontmatter(content) : null
     sendJson(response, 200, {
       ok: true,
       skill,
@@ -1000,79 +949,6 @@ export function apply(ctx, config = {}) {
     sendJson(response, 200, { ok: true, removed: name })
   }
 
-  /** 导入：把外部 Agent 的技能以软链或复制的方式装进受管根。 */
-  const importRoute = async (request, response) => {
-    const payload = await readJsonBody(request)
-    const sourceId = typeof payload.source === 'string' ? payload.source : ''
-    const name = typeof payload.name === 'string' ? payload.name : ''
-    const mode = payload.mode === 'copy' ? 'copy' : 'link'
-    if (!isValidSkillName(name)) return sendError(response, 400, '非法的技能名', undefined, 'invalid-name')
-    const external = scanExternalRoots(externalAgentRoots()).find((root) => root.id === sourceId)
-    if (!external) return sendError(response, 400, '未知的外部来源：' + sourceId, undefined, 'unknown-source', { source: sourceId })
-    const candidate = external.skills.find((skill) => skill.name === name)
-    if (!candidate) return sendError(response, 404, '外部目录里找不到技能：' + name, undefined, 'external-skill-not-found', { name })
-
-    const cwd = resolveCwd(payload.cwd)
-    const targetRoot = writeTargetRoot(payload.target, cwd)
-    if (!targetRoot) return sendError(response, 400, '目标根不可用（项目落点必须来自已登记的工作区）', undefined, 'target-root-unavailable')
-    const sourceDir = candidate.dir || dirname(candidate.path)
-    // 平铺 .md 技能没有自己的目录：落点用同名 .md 文件（DSH 也按平铺文件识别）。
-    const dest = candidate.isFlat ? join(targetRoot, name + '.md') : join(targetRoot, name)
-    if (!withinRoot(dest, targetRoot)) return sendError(response, 400, '非法的目标路径', undefined, 'invalid-name')
-    if (existsSync(dest)) return sendError(response, 409, '目标已存在同名技能：' + name, undefined, 'target-exists', { name })
-    // 软链不改源文件：源技能若不合 DSH 的规则，链过去也是不可用的，直接拒收并说明原因。
-    if (mode === 'link' && Array.isArray(candidate.issues) && candidate.issues.length > 0) {
-      return sendError(response, 400, '该外部技能不符合 DSH 的加载要求（' + candidate.issues.join('、') + '），软链不会修正源文件，请改用「直接复制」', undefined, 'external-not-loadable', { name, issues: candidate.issues })
-    }
-    try {
-      mkdirSync(targetRoot, { recursive: true })
-      if (candidate.isFlat) {
-        if (mode === 'link') symlinkSync(candidate.path, dest, 'file')
-        else copyFileSync(candidate.path, dest)
-      } else if (mode === 'link') {
-        // Windows 目录软链用 junction，免管理员权限。
-        symlinkSync(sourceDir, dest, process.platform === 'win32' ? 'junction' : 'dir')
-      } else {
-        cpSync(sourceDir, dest, { recursive: true })
-      }
-    } catch (error) {
-      return sendError(response, 500, '导入失败：' + String(error && error.message ? error.message : error))
-    }
-    // 复制模式：把落点的 frontmatter 归一化成 DSH 能加载的样子（补 name/description、删旧式调用键）。
-    let normalized = null
-    if (mode === 'copy') {
-      try {
-        const destMd = candidate.isFlat ? dest : join(dest, 'SKILL.md')
-        const raw = readFileSync(destMd)
-        if (isLosslessUtf8(raw)) {
-          const fixed = normalizeSkillFrontmatter(raw.toString('utf8'), { name, description: candidate.description || '' })
-          if (fixed.changes.length > 0) {
-            writeFileUtf8(destMd, fixed.text)
-            normalized = fixed.changes
-          }
-        }
-      } catch (error) {
-        log('import normalize failed for ' + name + ': ' + String(error && error.message ? error.message : error))
-      }
-    }
-    log('imported ' + name + ' from ' + external.id + ' (' + mode + ') to ' + dest + (normalized ? ' normalized:' + normalized.join(',') : ''))
-    // 导入的技能必须立刻出现在面板里：写操作后清掉扫描缓存。
-    invalidateSkillsCache()
-    sendJson(response, 200, { ok: true, imported: name, mode, path: dest, normalized: normalized || [] })
-  }
-
-  const externalRoute = async (request, response) => {
-    const roots = scanExternalRoots(externalAgentRoots())
-    const { skills } = await listSkills('')
-    const installed = new Set(skills.map((skill) => skill.name))
-    const payload = roots.map((root) => ({
-      ...root,
-      skills: root.skills.map((skill) => ({ ...skill, installed: installed.has(skill.name) })),
-      count: root.skills.length,
-    }))
-    sendJson(response, 200, { ok: true, sources: payload, total: payload.reduce((sum, root) => sum + root.count, 0) })
-  }
-
   /* --------------------------- 挂载路由 --------------------------- */
 
   ctx.inject(['webServer', 'loader'], (host) => {
@@ -1118,15 +994,6 @@ export function apply(ctx, config = {}) {
     post(`${API_BASE}/translate`, translateRoute)
     post(`${API_BASE}/reveal`, revealRoute)
     post(`${API_BASE}/remove`, removeRoute)
-    post(`${API_BASE}/import`, importRoute)
-
-    register(`${API_BASE}/external`, (request, response) => {
-      if (!isLoopbackRequest(request)) return sendError(response, 403, 'loopback requests only')
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return sendError(response, 405, 'method not allowed: ' + (request.method || ''), { allow: 'GET, HEAD' })
-      }
-      externalRoute(request, response).catch((error) => sendError(response, errorStatusOf(error), 'internal error'))
-    })
 
     log('routes mounted')
     ctx.effect(() => () => {

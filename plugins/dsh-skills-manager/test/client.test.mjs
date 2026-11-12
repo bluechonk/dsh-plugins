@@ -35,7 +35,7 @@ assert.ok(captured !== null && captured.__pure !== undefined, '桩物化失败�
 const P = captured.__pure
 
 test('__pure 导出面固定（防导出漂移）', () => {
-  assert.deepEqual(Object.keys(P).sort(), ['fallbackT', 'interpolate', 'localeDict', 'localeNs', 'localizeError', 'parseInline', 'parseMarkdown', 'scopeTextOf', 'tr', 'translationChunks'])
+  assert.deepEqual(Object.keys(P).sort(), ['fallbackT', 'filterSkills', 'interpolate', 'localeDict', 'localeNs', 'localizeError', 'parseInline', 'parseMarkdown', 'scopeTextOf', 'tr', 'translationChunks'])
   assert.ok(Object.isFrozen(P))
 })
 
@@ -187,6 +187,22 @@ test('translationChunks 单段超长时硬切', () => {
   const chunks = P.translationChunks('y'.repeat(500), 100)
   assert.deepEqual(chunks, ['y'.repeat(100), 'y'.repeat(100), 'y'.repeat(100), 'y'.repeat(100), 'y'.repeat(100)])
 })
+
+test('filterSkills 随输入实时过滤（无需回车确认）', () => {
+  const skills = [
+    { name: 'agent-browser', description: 'Browser automation CLI', path: '/x/agent-browser/SKILL.md', source: 'user-dsh' },
+    { name: 'office-pptx', description: 'Create and edit presentations', path: '/x/office-pptx/SKILL.md', source: 'bundled' },
+  ];
+  // 空查询（含纯空格）不过滤
+  assert.equal(P.filterSkills(skills, '').length, 2);
+  assert.equal(P.filterSkills(skills, '   ').length, 2);
+  // 名称 / 描述 / 路径 / 来源都能命中，且大小写不敏感
+  assert.deepEqual(P.filterSkills(skills, 'browser').map((s) => s.name), ['agent-browser']);
+  assert.deepEqual(P.filterSkills(skills, 'PRESENTATIONS').map((s) => s.name), ['office-pptx']);
+  assert.deepEqual(P.filterSkills(skills, 'bundled').map((s) => s.name), ['office-pptx']);
+  assert.deepEqual(P.filterSkills(skills, '/x/office').map((s) => s.name), ['office-pptx']);
+  assert.deepEqual(P.filterSkills(skills, 'zzz').map((s) => s.name), []);
+});
 
 test('scopeTextOf 按来源给出范围文案', () => {
   assert.equal(P.scopeTextOf({ source: 'user-agents' }), '个人')

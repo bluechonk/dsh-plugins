@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { globalRootsFor, isManagedRoot, normalizeCwd, projectRootOf, projectRootsFor, realWithinRoot, rootKindOf, withinRoot } from '../lib/roots.js'
-import { collectSkillFiles, discoverLocalSkills, externalAgentRoots, scanExternalRoots } from '../lib/index.js'
+import { collectSkillFiles, discoverLocalSkills } from '../lib/index.js'
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), 'dsm-test-'))
@@ -156,49 +156,6 @@ test('discoverLocalSkills 按 rank 升序裁决同名技能（项目根优先）
   } finally {
     rmSync(base, { recursive: true, force: true })
   }
-})
-
-test('scanExternalRoots 给出技能自己的目录（平铺文件不是整个外部根）', () => {
-  const base = tempDir()
-  try {
-    const ext = join(base, 'skills')
-    mkdirSync(ext, { recursive: true })
-    writeFileSync(join(ext, 'flat.md'), '---\nname: flat-skill\ndescription: 平铺\n---\n', 'utf8')
-    const scanned = scanExternalRoots([{ id: 'codex', label: 'Codex CLI', path: ext }])
-    const skill = scanned[0].skills[0]
-    assert.equal(skill.isBundle, false)
-    assert.equal(skill.isFlat, true)
-    // 平铺技能的目录仍是外部根（它本就没有自己的目录），
-    // 但导入时必须单独处理文件，不能把整个根当技能目录。
-    assert.equal(skill.dir, ext)
-  } finally {
-    rmSync(base, { recursive: true, force: true })
-  }
-})
-
-test('scanExternalRoots 列出外部目录并标记不存在的目录', () => {
-  const base = tempDir()
-  try {
-    const codex = join(base, '.codex', 'skills')
-    mkdirSync(join(codex, 'ext-skill'), { recursive: true })
-    writeFileSync(join(codex, 'ext-skill', 'SKILL.md'), '---\nname: ext-skill\ndescription: 外部技能\n---\n', 'utf8')
-    const scanned = scanExternalRoots([{ id: 'codex', label: 'Codex CLI', path: codex }, { id: 'claude', label: 'Claude Code', path: join(base, '.claude', 'skills') }])
-    assert.equal(scanned[0].count, 1)
-    assert.equal(scanned[0].skills[0].name, 'ext-skill')
-    assert.equal(scanned[1].exists, false)
-    assert.equal(scanned[1].count, 0)
-  } finally {
-    rmSync(base, { recursive: true, force: true })
-  }
-})
-
-test('externalAgentRoots 只覆盖 zcode / codex / claude 目录', () => {
-  const roots = externalAgentRoots('C:/home')
-  const ids = roots.map((root) => root.id)
-  assert.deepEqual(ids, ['zcode', 'codex', 'claude'])
-  assert.equal(roots.find((root) => root.id === 'codex').path, join('C:/home', '.codex', 'skills'))
-  assert.equal(roots.find((root) => root.id === 'claude').path, join('C:/home', '.claude', 'skills'))
-  assert.equal(roots.find((root) => root.id === 'zcode').path, join('C:/home', '.zcode', 'skills'))
 })
 
 test('withinRoot 只认根目录之内', () => {

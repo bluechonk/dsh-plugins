@@ -6,7 +6,7 @@ A DeepSeek Harness plugin that adds a **Skills** panel to the sidebar, alongside
 
 ![Skills panel in the sidebar](docs/images/01-sidebar-skills-panel.png)
 
-Clicking the row opens the full panel (scope switching, search, detail dialog, import):
+Clicking the row opens the full panel (scope switching, search, detail dialog):
 
 ![Skills panel](docs/images/10-skills-main-panel.png)
 
@@ -31,23 +31,18 @@ Package name, loader row id and client module id all use the `@bluechonk` scope;
 |---|---|
 | Scope dropdown | "User · Local" shows **only** the global `~/.dsh/skills`, the user-level `~/.agents/skills` and the preset built-ins; a "Workspaces" group lists every workspace, and picking one shows **only that workspace's** `<workspace>/.dsh/skills` and `<workspace>/.agents/skills` (global and user-level skills are not mixed in). Switching workspaces only rescans that workspace |
 | Skill count | "Skills N" at the top is the number of skills visible in the current scope |
-| Search | Filters live by name, description and path |
+| Search | Filters live as you type (name / description / path / source) — no Enter needed; a clear button appears once there is text |
 | Installed list | Name + description + delete button; deletion is limited to managed roots |
 | Compatibility hint | DSH requires both `name` and `description` in the frontmatter and rejects legacy invocation keys — skills that break those rules are flagged "Not loaded by DSH" (the host ignores such files entirely) |
-| Built-in group | Skills registered at runtime or shipped inside a package are shown read-only, grouped by source |
-| Import button | The "Import" button at the top right of the list: sources cover ZCode / Codex CLI / Claude Code; expand a source to see every skill with its name and description, pick individually or per source; a copy import fills in a missing description and removes legacy invocation keys |
+| Built-in group | Skills registered at runtime or shipped inside a package are shown read-only, grouped by source; **the body of a built-in skill is read from the host registry** (packaged skills such as the Office ones have no local file) |
 | Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in) and the file path (inline monospace path + copy icon) |
-| Translation | On by default in the detail dialog: the **description and body** are translated into Chinese (the skill name is an identifier and is never translated), keeping Markdown structure and code blocks. Use "View original" to compare, or the "Translate" button in the title bar to turn it off. It reuses the host's `translator` service (the same Bing/Google channel as the reasoning translation); when `dsh-experimental-cot-translation-bundle` is not enabled it reports unavailability and falls back to the original text |
+| Translation | A `[Original | Translated]` segmented control in the title bar, **off by default**; every detail open starts on the original (nothing is persisted). Switching to "Translated" translates the **description and body** (the skill name is an identifier and is never translated), keeping Markdown structure and code blocks. It reuses the host's `translator` service (the same Bing/Google channel as the reasoning translation); while translating or on failure a small status line says so, and when `dsh-experimental-cot-translation-bundle` is not enabled it reports unavailability and falls back to the original text |
 
 ![Skill detail dialog](docs/images/02-skill-detail-dialog.png)
 
 The same dialog translated (description and body in Chinese, switchable back to the original):
 
 ![Translated skill detail](docs/images/11-skill-detail-translation.png)
-
-Import button and import dialog:
-
-![Import external agent skills](docs/images/04-import-external-agent-skills.png)
 
 Scope dropdown:
 
@@ -140,8 +135,6 @@ The host half registers same-origin routes on `ctx.webServer` (all guarded by lo
 | POST | `/dsh-skills-manager/body` | One skill's frontmatter, body and file list |
 | POST | `/dsh-skills-manager/reveal` | Open the skill folder in the system file manager |
 | POST | `/dsh-skills-manager/remove` | Delete a skill under a managed root |
-| POST | `/dsh-skills-manager/import` | Import from an external folder (symlink / copy) |
-| GET | `/dsh-skills-manager/external` | Scan external agent skill folders |
 
 Error responses carry a stable `code` (plus `params` for dynamic parts such as the skill name) so the client can render the message in the host's active language.
 
@@ -150,7 +143,6 @@ Error responses carry a stable `code` (plus `params` for dynamic parts such as t
 - Write targets are always resolved by the host from the skills it scanned, so **no arbitrary absolute path from the client is accepted**; a project target must come from a registered workspace.
 - Deletion is limited to managed roots (`user-dsh` / `user-agents` / `project-dsh` / `project-agents`); a symlink is only unlinked, never its target; the target is checked against the managed root itself; the UI asks for confirmation and shows the path.
 - Skills shipped inside official packages (under `node_modules`, detected through the real path) refuse modification and deletion so official packages are never damaged.
-- A copy import only rewrites the copied file, never the source folder; files that are not UTF-8 (e.g. GBK) are left alone rather than being corrupted.
 - The plugin writes no persistent data of its own, only a `skills-manager.log` audit trail in the profile directory; it never reaches the network.
 
 ## Layout
@@ -162,7 +154,7 @@ plugins/dsh-skills-manager/
 ├─ lib/index.js          # host half: root resolution, discovery, routes, write operations
 ├─ lib/roots.js          # root resolution and project-root detection (pure functions)
 ├─ lib/frontmatter.js    # frontmatter parsing and disable-model-invocation rewriting (pure functions)
-├─ client/client.js      # client half: sidebar row + main panel + detail/import/create dialogs
+├─ client/client.js      # client half: sidebar row + main panel + detail dialog
 ├─ locale/{en,zh}.json   # plugin manager metadata (meta.title / meta.description)
 ├─ icon.svg              # original icon
 ├─ docs/                 # design & verification notes, real captures, changelog
@@ -172,7 +164,7 @@ plugins/dsh-skills-manager/
 ## Development
 
 ```bash
-npm test          # node:test unit tests (55 cases: frontmatter / roots / discovery / HTTP layer / client pure functions / i18n)
+npm test          # node:test unit tests (54 cases: frontmatter / roots / discovery / HTTP layer / client pure functions / i18n)
 npm run check     # syntax check (lib and client)
 ```
 

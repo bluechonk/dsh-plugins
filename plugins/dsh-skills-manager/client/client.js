@@ -51,8 +51,11 @@ window.__ModuleLoader__.load({
       ".dsm-meta{color:var(--dsw-alias-label-secondary);font-size:14px;white-space:nowrap}",
       ".dsm-meta b{font-weight:400;color:var(--dsw-alias-label-secondary)}",
       ".dsm-searchWrap{position:relative;display:flex;align-items:center;width:256px;max-width:100%;flex:none}",
-      ".dsm-searchWrap svg{position:absolute;left:10px;pointer-events:none;color:var(--dsw-alias-label-secondary)}",
-      ".dsm-search{width:100%;height:36px;padding:0 12px 0 36px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;outline:none}",
+      ".dsm-searchWrap .dsm-searchIcon{position:absolute;left:10px;pointer-events:none;color:var(--dsw-alias-label-secondary)}",
+      ".dsm-search{width:100%;height:36px;padding:0 30px 0 36px;border-radius:12px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;outline:none}",
+      ".dsm-searchClear{position:absolute;right:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
+      ".dsm-searchClear:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}",
+      ".dsm-searchClear svg{width:12px;height:12px}",
       ".dsm-search:focus{border-color:var(--dsw-alias-brand-primary)}",
       ".dsm-search::placeholder{color:var(--dsw-alias-label-secondary)}",
       // —— 分组标题 ——
@@ -76,24 +79,12 @@ window.__ModuleLoader__.load({
       ".dsm-badges{display:flex;gap:6px;align-items:center;flex:none}",
       ".dsm-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap}",
       ".dsm-badgeWarn{color:var(--dsw-alias-state-warning,var(--dsw-alias-label-secondary));border-color:color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 45%, transparent)}",
-      ".dsm-badgeOff{color:var(--dsw-alias-label-tertiary,var(--dsw-alias-label-secondary))}",
       ".dsm-rowMainTitle{display:flex;align-items:center;gap:8px;min-width:0}",
-      ".dsm-skillList{display:flex;flex-direction:column;gap:6px;padding:2px 0 8px 26px}",
-      ".dsm-skillItem{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:9px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent)}",
-      ".dsm-skillItemMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}",
-      ".dsm-skillItemName{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      ".dsm-skillItemDesc{font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      // —— 导入按钮 ——
-      ".dsm-importBtn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px 0 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;cursor:pointer}",
-      ".dsm-importBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
       ".dsm-trash{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
       ".dsm-trash:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-2)}",
       ".dsm-groupTitle{padding:10px 4px 6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:600}",
       // —— 下拉菜单 ——
       ".dsm-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:230px;padding:6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:2px}",
-      ".dsm-menuRight{left:auto;right:0}",
-      // 向上展开：弹窗底部的下拉菜单否则会落在弹窗外并被 overflow 裁掉。
-      ".dsm-menuUp{top:auto;bottom:calc(100% + 6px)}",
       ".dsm-menuItem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;width:100%}",
       ".dsm-menuItem:hover{background:var(--dsw-alias-bg-layer-2)}",
       ".dsm-menuItem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
@@ -136,26 +127,8 @@ window.__ModuleLoader__.load({
       // 文本按钮：图标按钮是 30px 方形，装不下「取消」这类文字
       ".dsm-btnText{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;white-space:nowrap;cursor:pointer}",
       ".dsm-btnText:hover{background:var(--dsw-alias-bg-layer-2)}",
-      // —— 导入弹窗 ——
       ".dsm-select{position:relative}",
       ".dsm-selectBtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}",
-      ".dsm-importBody{padding:14px 18px;display:flex;flex-direction:column;gap:10px;overflow:auto}",
-      ".dsm-importCard{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;padding:6px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}",
-      ".dsm-selectAll{display:flex;align-items:center;gap:10px;padding:8px 10px}",
-      ".dsm-selCount{margin-left:auto;color:var(--dsw-alias-label-secondary);font-size:12.5px}",
-      ".dsm-sourceRow{display:flex;align-items:center;gap:12px;padding:10px;border-radius:9px;cursor:pointer}",
-      ".dsm-sourceBlock{display:flex;flex-direction:column}",
-      ".dsm-chevronOpen{transform:rotate(90deg)}",
-      ".dsm-sourceRow:hover{background:var(--dsw-alias-bg-layer-2)}",
-      ".dsm-sourceMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}",
-      ".dsm-sourceName{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      ".dsm-sourcePath{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      ".dsm-sourceCount{color:var(--dsw-alias-label-secondary);font-size:12.5px;white-space:nowrap}",
-      ".dsm-importFoot{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--dsw-alias-border-l1)}",
-      ".dsm-footLeft{display:flex;align-items:center;gap:8px;color:var(--dsw-alias-label-secondary);font-size:13px}",
-      ".dsm-footRight{margin-left:auto;display:flex;align-items:center;gap:8px}",
-      // —— 复选框 ——
-      ".dsm-check{width:16px;height:16px;flex:none;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}",
       // —— 表单 ——
       ".dsm-field{display:flex;flex-direction:column;gap:6px}",
       ".dsm-input{height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;outline:none}",
@@ -165,13 +138,12 @@ window.__ModuleLoader__.load({
       ".dsm-error{color:var(--dsw-alias-state-error-primary);font-size:12.5px}",
       ".dsm-state{padding:28px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:13.5px}",
       ".dsm-footNote{margin-top:10px;font-size:12px;color:var(--dsw-alias-label-secondary);line-height:1.6}",
-      // —— 翻译开关与状态条 ——
-      ".dsm-translateToggle{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;margin-left:8px;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}",
-      ".dsm-translateToggle:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
-      ".dsm-translateToggle[data-on=\"true\"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}",
+      // —— 翻译分段按钮与出错提示 ——
+      ".dsm-seg{display:inline-flex;align-items:center;gap:2px;height:24px;padding:2px;margin-left:8px;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}",
+      ".dsm-segBtn{height:20px;padding:0 10px;border:0;border-radius:9999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;cursor:pointer}",
+      ".dsm-segBtn:hover{color:var(--dsw-alias-label-primary)}",
+      ".dsm-segBtn[data-on=\"true\"]{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base)}",
       ".dsm-translateBar{display:flex;align-items:center;gap:8px;margin:-2px 0 10px;min-height:20px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}",
-      ".dsm-translateBar button{padding:0;border:0;background:none;color:var(--dsw-alias-brand-primary);font:inherit;font-size:12.5px;cursor:pointer}",
-      ".dsm-translateBar button:hover{text-decoration:underline}",
     ].join("");
 
     /** 注入样式（按 data-plugin-css 去重，热重载原位替换）。 */
@@ -197,21 +169,12 @@ window.__ModuleLoader__.load({
     const IconMonitor = (p) => h(Svg, p, h("rect", { x: 3, y: 4, width: 18, height: 13, rx: 2 }), h("path", { d: "M8 21h8M12 17v4" }));
     const IconFolder = (p) => h(Svg, p, h("path", { d: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" }));
     const IconCaret = (p) => h(Svg, Object.assign({ width: 14, height: 14 }, p), h("path", { d: "m6 9 6 6 6-6" }));
-    const IconChevronRight = (p) => h(Svg, Object.assign({ width: 16, height: 16 }, p), h("path", { d: "m9 6 6 6-6 6" }));
     const IconSearch = (p) => h(Svg, p, h("circle", { cx: 11, cy: 11, r: 7 }), h("path", { d: "m20 20-3.2-3.2" }));
     const IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
     const IconTrash = (p) => h(Svg, p, h("path", { d: "M4 7h16M10 11v6M14 11v6" }), h("path", { d: "M6 7l1 13h10l1-13" }), h("path", { d: "M9 7V4h6v3" }));
     const IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
     const IconCheck = (p) => h(Svg, p, h("path", { d: "m5 13 4 4 10-10" }));
     const IconCopy = (p) => h(Svg, p, h("rect", { x: 9, y: 9, width: 11, height: 11, rx: 2 }), h("path", { d: "M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" }));
-    // 「文 + A」：机器翻译的通用图形，16px 下比文字按钮更省地。
-    const IconTranslate = (p) => h(Svg, p,
-      h("path", { d: "M3.5 4.5h6M6.5 2.5v2c0 2.6-1.3 4.8-3.5 6.3" }),
-      h("path", { d: "M4.6 9.2c.9 1.8 2.7 3.2 4.9 3.9" }),
-      h("path", { d: "m12 19.5 3.2-8.6 3.2 8.6M13.2 16.8h4" }),
-    );
-    const IconImport = (p) => h(Svg, p, h("path", { d: "M12 3v11" }), h("path", { d: "m8 10 4 4 4-4" }), h("path", { d: "M4 19h16" }));
-    const IconInfo = (p) => h(Svg, p, h("circle", { cx: 12, cy: 12, r: 9 }), h("path", { d: "M12 11v5" }), h("path", { d: "M12 8h.01" }));
     const IconSparkle = (p) => h(Svg, p, h("path", { d: "M12 3c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" }), h("path", { d: "M18 15c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z" }));
     const IconLayers = (p) => h(Svg, p, h("rect", { x: 4, y: 4, width: 12, height: 12, rx: 2 }), h("path", { d: "M9 20h9a2 2 0 0 0 2-2V9" }));
 
@@ -499,6 +462,7 @@ window.__ModuleLoader__.load({
         "section.builtin": "内置",
         "toolbar.count": "技能 {n}",
         "toolbar.search": "搜索技能...",
+        "toolbar.clearSearch": "清除搜索",
         "scope.user": "用户 · 本机",
         "scope.localSuffix": "· 本机",
         "scope.group.workspaces": "工作区",
@@ -506,7 +470,6 @@ window.__ModuleLoader__.load({
         "scope.builtin": "内置",
         "scope.workspace": "工作区",
         "action.refresh": "刷新",
-        "action.import": "导入",
         "action.cancel": "取消",
         "action.delete": "删除",
         "action.retry": "重试",
@@ -527,40 +490,16 @@ window.__ModuleLoader__.load({
         "issue.missing-description": "frontmatter 缺少 description",
         "issue.legacy-invocation-key": "含 DSH 已废弃的调用键（disableModelInvocation / modelInvocable / userInvocable）",
         "issue.invalid-invocation-value": "调用键的取值不是布尔（true / false）",
-        "import.expandSource": "展开来源",
-        "import.collapseSource": "收起来源",
-        "import.sourceMissing": "目录不存在",
-        "import.emptySource": "该来源没有可导入的技能",
-        "import.noDescription": "（没有描述；复制导入时会自动补齐）",
-        "import.notLoadable": "不符合 DSH 加载要求",
-        "import.willNormalize": "导入时自动修正",
         "detail.truncated": "文件较大，正文已截断显示。",
         "detail.noDescription": "（该技能没有描述）",
         "detail.noContent": "（该技能没有正文）",
         "detail.builtinNoFile": "（内置技能，无本地文件）",
         "detail.translate": "翻译",
+        "detail.sourceText": "原文",
+        "detail.translatedText": "译文",
         "detail.translating": "翻译中…",
-        "detail.translatedBadge": "译文",
-        "detail.viewOriginal": "看原文",
-        "detail.viewTranslation": "看译文",
         "detail.translationFailed": "翻译失败，已显示原文",
         "detail.translationUnavailable": "翻译服务不可用（需启用 cot-translation 插件）",
-        "import.title": "导入外部 Agent 技能",
-        "import.targetGlobal": "全局",
-        "import.targetProject": "项目",
-        "import.selectAll": "全选",
-        "import.selected": "已选 {n}/{total}",
-        "import.skillCount": "{n} 个技能",
-        "import.found": "发现 {n} 个可导入技能",
-        "import.mode.link": "软链",
-        "import.mode.copy": "直接复制",
-        "import.toGlobal": "导入到全局",
-        "import.toProject": "导入到项目",
-        "import.info.link": "软链：在目标根创建指向原目录的链接（Windows 使用 junction，免管理员权限）",
-        "import.info.copy": "直接复制：把技能目录完整复制到目标根",
-        "import.done": "已导入 {n} 个技能",
-        "import.failed": "，失败 {n} 个",
-        "import.selectSource": "选择 {label} 的全部技能",
         "delete.title": "删除技能",
         "delete.question": "确定删除技能「{name}」？",
         "delete.note": "技能目录下的全部文件都会被移除，此操作不可撤销。",
@@ -593,8 +532,6 @@ window.__ModuleLoader__.load({
         "error.target-root-unavailable": "目标根不可用（项目落点必须来自已登记的工作区）",
         "error.skill-exists": "技能已存在：{name}",
         "error.target-exists": "目标已存在同名技能：{name}",
-        "error.unknown-source": "未知的外部来源：{source}",
-        "error.external-skill-not-found": "外部目录里找不到技能：{name}",
         "error.no-local-dir": "该技能没有可打开的本地目录",
         "error.dir-missing": "目录不存在：{path}",
         "error.translator-unavailable": "翻译服务不可用（需启用 cot-translation 插件）",
@@ -611,6 +548,7 @@ window.__ModuleLoader__.load({
         "section.builtin": "Built-in",
         "toolbar.count": "Skills {n}",
         "toolbar.search": "Search skills...",
+        "toolbar.clearSearch": "Clear search",
         "scope.user": "User · Local",
         "scope.localSuffix": "· Local",
         "scope.group.workspaces": "Workspaces",
@@ -618,7 +556,6 @@ window.__ModuleLoader__.load({
         "scope.builtin": "Built-in",
         "scope.workspace": "Workspace",
         "action.refresh": "Refresh",
-        "action.import": "Import",
         "action.cancel": "Cancel",
         "action.delete": "Delete",
         "action.retry": "Retry",
@@ -639,40 +576,16 @@ window.__ModuleLoader__.load({
         "issue.missing-description": "frontmatter has no description",
         "issue.legacy-invocation-key": "carries an invocation key DSH no longer accepts (disableModelInvocation / modelInvocable / userInvocable)",
         "issue.invalid-invocation-value": "an invocation key is not a boolean (true / false)",
-        "import.expandSource": "Expand source",
-        "import.collapseSource": "Collapse source",
-        "import.sourceMissing": "Folder not found",
-        "import.emptySource": "No importable skills in this source",
-        "import.noDescription": "(no description; it is filled in when copying)",
-        "import.notLoadable": "Not loadable by DSH",
-        "import.willNormalize": "Fixed on import",
         "detail.truncated": "The file is large; the content is truncated.",
         "detail.noDescription": "(This skill has no description)",
         "detail.noContent": "(This skill has no content)",
         "detail.builtinNoFile": "(Built-in skill, no local file)",
         "detail.translate": "Translate",
+        "detail.sourceText": "Original",
+        "detail.translatedText": "Translated",
         "detail.translating": "Translating…",
-        "detail.translatedBadge": "Translated",
-        "detail.viewOriginal": "View original",
-        "detail.viewTranslation": "View translation",
         "detail.translationFailed": "Translation failed; the original text is shown",
         "detail.translationUnavailable": "Translation is unavailable (enable the cot-translation plugin)",
-        "import.title": "Import External Agent Skills",
-        "import.targetGlobal": "Global",
-        "import.targetProject": "Project",
-        "import.selectAll": "Select all",
-        "import.selected": "{n}/{total} selected",
-        "import.skillCount": "{n} skills",
-        "import.found": "{n} importable skills found",
-        "import.mode.link": "Symlink",
-        "import.mode.copy": "Copy",
-        "import.toGlobal": "Import to Global",
-        "import.toProject": "Import to Project",
-        "import.info.link": "Symlink: create a link to the source folder in the target root (junction on Windows, no admin rights needed)",
-        "import.info.copy": "Copy: copy the whole skill folder into the target root",
-        "import.done": "Imported {n} skills",
-        "import.failed": ", {n} failed",
-        "import.selectSource": "Select all skills from {label}",
         "delete.title": "Delete Skill",
         "delete.question": "Delete skill \u201c{name}\u201d?",
         "delete.note": "All files in the skill folder will be removed. This cannot be undone.",
@@ -705,8 +618,6 @@ window.__ModuleLoader__.load({
         "error.target-root-unavailable": "Target root unavailable (a project target must come from a registered workspace)",
         "error.skill-exists": "Skill already exists: {name}",
         "error.target-exists": "A skill with the same name already exists at the target: {name}",
-        "error.unknown-source": "Unknown external source: {source}",
-        "error.external-skill-not-found": "Skill not found in the external folder: {name}",
         "error.no-local-dir": "This skill has no local folder to open",
         "error.dir-missing": "Folder not found: {path}",
         "error.translator-unavailable": "Translation is unavailable (enable the cot-translation plugin)",
@@ -767,6 +678,14 @@ window.__ModuleLoader__.load({
       return key ? tr(currentT, key) : String(source || "");
     }
 
+    /** 实时过滤：按名称 / 描述 / 路径 / 来源匹配，空查询原样返回。 */
+    function filterSkills(skills, query) {
+      const needle = String(query || "").trim().toLowerCase();
+      if (needle === "") return skills;
+      return skills.filter((skill) =>
+        [skill.name, skill.description, skill.path, skill.source].some((field) => String(field || "").toLowerCase().includes(needle)));
+    }
+
     /** 宿主返回的错误：按 code 查本地化文案，没有 code 就退回原文。 */
     function localizeError(error) {
       if (!error) return tr(currentT, "error.internal-error");
@@ -812,7 +731,7 @@ window.__ModuleLoader__.load({
           document.removeEventListener("keydown", onKey);
         };
       }, [open]);
-      const menuClass = "dsm-menu" + (props.menuUp ? " dsm-menuUp" : "") + (props.menuRight ? " dsm-menuRight" : "");
+      const menuClass = "dsm-menu";
       return h("div", { className: props.className || "dsm-select", ref: ref },
         h("button", {
           type: "button",
@@ -879,12 +798,11 @@ window.__ModuleLoader__.load({
       const [detail, setDetail] = useState(null);
       const [error, setError] = useState(null);
       const [copied, setCopied] = useState(null);
-      // 翻译默认开启：看英文介绍时直接给中文。name 是标识符，不参与翻译。
-      const [translateOn, setTranslateOn] = useState(true);
+      // 翻译默认关闭：是否看译文由用户决定，且每次打开详情都从「原文」开始（不做持久化）。
+      const [translateOn, setTranslateOn] = useState(false);
       const [translating, setTranslating] = useState(false);
       const [translated, setTranslated] = useState({ desc: "", content: "" });
       const [translateError, setTranslateError] = useState(null);
-      const [showOriginal, setShowOriginal] = useState(false);
       useEffect(() => {
         let alive = true;
         setDetail(null);
@@ -892,7 +810,6 @@ window.__ModuleLoader__.load({
         setCopied(null);
         setTranslated({ desc: "", content: "" });
         setTranslateError(null);
-        setShowOriginal(false);
         apiPost("/body", { name: skill.name, cwd: props.cwd })
           .then((payload) => { if (alive) setDetail(payload); })
           .catch((err) => { if (alive) setError(localizeError(err)); });
@@ -947,7 +864,7 @@ window.__ModuleLoader__.load({
 
       const hasTranslation = Boolean(translated.desc || translated.content);
       // 翻译中 / 失败 / 关掉开关 / 正在看原文 —— 这几种情况都回落到原文。
-      const showTranslated = translateOn && !showOriginal && !translating && !translateError && hasTranslation;
+      const showTranslated = translateOn && !translating && !translateError && hasTranslation;
       const descShown = showTranslated && translated.desc ? translated.desc : descriptionText;
       const bodyShown = showTranslated && translated.content ? translated.content : bodyText;
 
@@ -955,14 +872,21 @@ window.__ModuleLoader__.load({
         h("div", { className: "dsm-modalHead" },
           h("span", { className: "dsm-modalTitle" }, skill.name),
           h("span", { className: "dsm-badgeSkill", style: { marginLeft: "8px" } }, "Skill"),
-          h("button", {
-            type: "button",
-            className: "dsm-translateToggle",
-            "data-on": translateOn ? "true" : "false",
-            "aria-pressed": translateOn ? "true" : "false",
-            title: t("detail.translate"),
-            onClick: () => setTranslateOn((value) => !value),
-          }, h(IconTranslate, null), h("span", null, t("detail.translate"))),
+          h("div", { className: "dsm-seg", role: "group", "aria-label": t("detail.translate") },
+            h("button", {
+              type: "button",
+              className: "dsm-segBtn",
+              "data-on": translateOn ? "false" : "true",
+              "aria-pressed": translateOn ? "false" : "true",
+              onClick: () => setTranslateOn(false),
+            }, t("detail.sourceText")),
+            h("button", {
+              type: "button",
+              className: "dsm-segBtn",
+              "data-on": translateOn ? "true" : "false",
+              "aria-pressed": translateOn ? "true" : "false",
+              onClick: () => setTranslateOn(true),
+            }, t("detail.translatedText"))),
           h("div", { style: { marginLeft: "auto" } },
             IconButton({ className: "dsm-iconBtnSm", label: "关闭", onClick: props.onClose }, h(IconClose, null))),
         ),
@@ -972,13 +896,7 @@ window.__ModuleLoader__.load({
               ? h("span", null, t("detail.translating"))
               : translateError
                 ? h("span", { className: "dsm-error" }, translateError)
-                : hasTranslation
-                  ? h("span", null, t("detail.translatedBadge"))
-                  : null,
-            hasTranslation && !translating
-              ? h("button", { type: "button", onClick: () => setShowOriginal((value) => !value) },
-                  t(showOriginal ? "detail.viewTranslation" : "detail.viewOriginal"))
-              : null,
+                : null,
           ),
           h("div", { className: "dsm-label" }, t("detail.description")),
           h("div", { className: "dsm-mdScroll" }, error
@@ -999,240 +917,6 @@ window.__ModuleLoader__.load({
           h("div", { className: "dsm-pathRow" },
             h("code", { className: "dsm-path", title: skill.path || "" }, skill.path || t("detail.builtinNoFile")),
             IconButton({ className: "dsm-iconBtnSm", label: copied === null ? t("action.copyPath") : copied ? t("action.copied") : t("action.copyFailed"), onClick: copyPath }, h(IconCopy, null)),
-          ),
-        ),
-      );
-    }
-
-    /* ---------------------------------------------------------------- */
-    /* 导入弹窗                                                          */
-    /* ---------------------------------------------------------------- */
-
-    function ImportModal(props) {
-      const t = props.t || currentT || fallbackT();
-      const [data, setData] = useState(null);
-      const [error, setError] = useState(null);
-      const [selected, setSelected] = useState(() => new Set());
-      // 展开的外部来源：默认全展开，让用户一眼看到每个技能的名称与描述。
-      const [expanded, setExpanded] = useState(() => new Set());
-      const [mode, setMode] = useState("link");
-      // 只有作用域本身就是工作区时才允许「导入到项目」——否则宿主会落到全局根，
-      // 按钮却写着「导入到项目」，用户以为装到了项目里。
-      const canProject = Boolean(props.cwd);
-      const [target, setTarget] = useState(props.scopeKind === "project" && props.cwd ? "project" : "global");
-      const [busy, setBusy] = useState(false);
-      const [result, setResult] = useState(null);
-
-      const load = useCallback(() => {
-        let alive = true;
-        setError(null);
-        apiGet("/external")
-          .then((payload) => {
-            if (!alive) return;
-            setData(payload);
-            setSelected(new Set());
-            // 默认展开所有来源：直接看到每个技能的名称与描述。
-            setExpanded(new Set(((payload && payload.sources) || []).map((source) => source.id)));
-          })
-          .catch((err) => { if (!alive) return; setError(localizeError(err)); });
-        return () => { alive = false; };
-      }, []);
-
-      useEffect(() => { load(); }, [load]);
-      useEffect(() => { if (!canProject) setTarget("global"); }, [canProject]);
-
-      const sources = (data && data.sources) || [];
-      // 选择键用「来源::名字」：不同外部目录可能存在同名技能，按名字去重会互相串选。
-      const keyOf = (skill) => skill.source + "::" + skill.name;
-      const allSkills = [];
-      for (const source of sources) {
-        for (const skill of source.skills || []) {
-          // 顺序要紧：宿主返回的技能对象里可能带 source 字段，不能覆盖来源 id。
-          allSkills.push(Object.assign({}, skill, { source: source.id, installed: Boolean(skill.installed) }));
-        }
-      }
-      const importable = allSkills.filter((skill) => !skill.installed);
-
-      const allChecked = importable.length > 0 && importable.every((skill) => selected.has(keyOf(skill)));
-      const toggleAll = () => {
-        setSelected((previous) => {
-          const all = importable.every((skill) => previous.has(keyOf(skill)));
-          if (all) return new Set();
-          const next = new Set();
-          for (const skill of importable) next.add(keyOf(skill));
-          return next;
-        });
-      };
-
-      const toggleExpanded = (sourceId) => {
-        setExpanded((previous) => {
-          const next = new Set(previous);
-          if (next.has(sourceId)) next.delete(sourceId);
-          else next.add(sourceId);
-          return next;
-        });
-      };
-
-      /** 勾选/取消单个外部技能。 */
-      const toggleOne = (source, skill) => {
-        const key = source.id + "::" + skill.name;
-        setSelected((previous) => {
-          const next = new Set(previous);
-          if (next.has(key)) next.delete(key);
-          else next.add(key);
-          return next;
-        });
-      };
-
-      const toggleSource = (source) => {
-        const items = (source.skills || []).filter((skill) => !skill.installed);
-        setSelected((previous) => {
-          const next = new Set(previous);
-          const allOn = items.length > 0 && items.every((skill) => next.has(keyOf(Object.assign({}, skill, { source: source.id }))));
-          for (const skill of items) {
-            const key = source.id + "::" + skill.name;
-            if (allOn) next.delete(key);
-            else next.add(key);
-          }
-          return next;
-        });
-      };
-
-      const doImport = async () => {
-        setBusy(true);
-        setError(null);
-        setResult(null);
-        let done = 0;
-        const failures = [];
-        // 逐条导入：一条失败不能把后面的选中项一起废掉。
-        for (const skill of importable) {
-          if (!selected.has(keyOf(skill))) continue;
-          try {
-            await apiPost("/import", { source: skill.source, name: skill.name, mode, target, cwd: props.cwd });
-            done += 1;
-          } catch (err) {
-            failures.push(skill.name + "：" + localizeError(err));
-          }
-        }
-        setResult(t("import.done", { n: done }) + (failures.length > 0 ? t("import.failed", { n: failures.length }) : ""));
-        if (failures.length > 0) setError(failures.join("；"));
-        setBusy(false);
-        load();
-        props.onImported();
-      };
-
-      const targetLabel = target === "project" ? t("import.toProject") : t("import.toGlobal");
-
-      return h(Modal, { onClose: props.onClose, modalClassName: "dsm-importModal", label: t("import.title") },
-        h("div", { className: "dsm-modalHead" },
-          h("span", { className: "dsm-modalTitle" }, t("import.title")),
-          h("div", { style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: "8px" } },
-            h(Dropdown, {
-              buttonClassName: "dsm-selectBtn",
-              trigger: h("span", null, target === "project" ? t("import.targetProject") : t("import.targetGlobal")),
-              children: (close) => [
-                h("button", { key: "global", type: "button", className: "dsm-menuItem", role: "menuitem", onClick: () => { setTarget("global"); close(); } },
-                  h("span", null, t("import.targetGlobal")),
-                  target === "global" ? h(IconCheck, null) : null),
-                canProject
-                  ? h("button", { key: "project", type: "button", className: "dsm-menuItem", role: "menuitem", onClick: () => { setTarget("project"); close(); } },
-                    h("span", null, t("import.targetProject")),
-                    target === "project" ? h(IconCheck, null) : null)
-                  : null,
-              ],
-            }),
-            IconButton({ className: "dsm-iconBtnSm", label: t("action.rescan"), onClick: load }, h(IconRefresh, null)),
-            IconButton({ className: "dsm-iconBtnSm", label: "关闭", onClick: props.onClose }, h(IconClose, null)),
-          ),
-        ),
-        h("div", { className: "dsm-importBody" },
-          h("div", { className: "dsm-importCard" },
-            h("div", { className: "dsm-selectAll" },
-              h("input", { type: "checkbox", className: "dsm-check", checked: allChecked, "aria-label": "全选可导入技能", onChange: toggleAll }),
-              h("span", null, t("import.selectAll")),
-              h("span", { className: "dsm-selCount" }, t("import.selected", { n: selected.size, total: importable.length })),
-            ),
-            sources.map((source) => {
-              const sourceItems = (source.skills || []).filter((skill) => !skill.installed);
-              const sourceChecked = sourceItems.length > 0 && sourceItems.every((skill) => selected.has(source.id + "::" + skill.name));
-              const open = expanded.has(source.id);
-              return h("div", { key: source.id, className: "dsm-sourceBlock" },
-                h("div", {
-                  className: "dsm-sourceRow",
-                  role: "button",
-                  tabIndex: 0,
-                  "aria-expanded": open ? "true" : "false",
-                  "aria-label": (open ? t("import.collapseSource") : t("import.expandSource")) + " " + source.label,
-                  onClick: () => toggleExpanded(source.id),
-                  onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleExpanded(source.id); } },
-                },
-                  h("input", {
-                    type: "checkbox",
-                    className: "dsm-check",
-                    checked: sourceChecked,
-                    "aria-label": t("import.selectSource", { label: source.label }),
-                    onClick: (event) => event.stopPropagation(),
-                    onChange: () => toggleSource(source),
-                  }),
-                  h("div", { className: "dsm-sourceMain" },
-                    h("div", { className: "dsm-sourceName", title: source.label }, source.label),
-                    h("div", { className: "dsm-sourcePath", title: source.path }, source.exists ? source.path : t("import.sourceMissing")),
-                  ),
-                  h("div", { className: "dsm-sourceCount" }, t("import.skillCount", { n: source.count })),
-                  h(IconChevronRight, { className: open ? "dsm-chevronOpen" : "" }),
-                ),
-                open ? h("div", { className: "dsm-skillList" },
-                  sourceItems.length === 0
-                    ? h("div", { className: "dsm-muted" }, t("import.emptySource"))
-                    : sourceItems.map((skill) => {
-                      const key = source.id + "::" + skill.name;
-                      const issues = Array.isArray(skill.issues) ? skill.issues : [];
-                      return h("div", { key, className: "dsm-skillItem" },
-                        h("input", {
-                          type: "checkbox",
-                          className: "dsm-check",
-                          checked: selected.has(key),
-                          "aria-label": t("import.selectSource", { label: skill.name }),
-                          onChange: () => toggleOne(source, skill),
-                        }),
-                        h("div", { className: "dsm-skillItemMain" },
-                          h("div", { className: "dsm-skillItemName", title: skill.name }, skill.name),
-                          h("div", { className: "dsm-skillItemDesc", title: skill.description }, skill.description || t("import.noDescription")),
-                        ),
-                        issues.length > 0
-                          ? h("span", {
-                            className: "dsm-badge dsm-badgeWarn",
-                            title: issues.map((issue) => t("issue." + issue, {})).join("；"),
-                          }, t("import.willNormalize"))
-                          : null,
-                      );
-                    }),
-                ) : null,
-              );
-            }),
-          ),
-          error ? h("div", { className: "dsm-error" }, error) : null,
-          result ? h("div", { className: "dsm-footNote" }, result) : null,
-        ),
-        h("div", { className: "dsm-importFoot" },
-          h("div", { className: "dsm-footLeft" },
-            h("span", null, t("import.found", { n: importable.length })),
-            h(Dropdown, {
-              buttonClassName: "dsm-selectBtn",
-              menuUp: true,
-              trigger: h("span", null, mode === "link" ? t("import.mode.link") : t("import.mode.copy")),
-              children: (close) => [
-                h("button", { key: "link", type: "button", className: "dsm-menuItem", role: "menuitem", onClick: () => { setMode("link"); close(); } },
-                  h("span", null, t("import.mode.link")), mode === "link" ? h(IconCheck, null) : null),
-                h("button", { key: "copy", type: "button", className: "dsm-menuItem", role: "menuitem", onClick: () => { setMode("copy"); close(); } },
-                  h("span", null, t("import.mode.copy")), mode === "copy" ? h(IconCheck, null) : null),
-              ],
-            }),
-            h(IconInfo, { title: mode === "link" ? t("import.info.link") : t("import.info.copy") }),
-          ),
-          h("div", { className: "dsm-footRight" },
-            h("button", { type: "button", className: "dsm-primary", disabled: busy || selected.size === 0, onClick: doImport },
-              h("span", null, targetLabel), h(IconCaret, null)),
           ),
         ),
       );
@@ -1285,7 +969,6 @@ window.__ModuleLoader__.load({
       const [search, setSearch] = useState("");
       const [scope, setScope] = useState({ kind: "global", path: "", title: "" });
       const [detail, setDetail] = useState(null);
-      const [showImport, setShowImport] = useState(false);
       const [notice, setNotice] = useState(null);
       const [confirmRemove, setConfirmRemove] = useState(null);
       // 请求序号：作用域快速切换时，过期响应不得覆盖新数据。
@@ -1343,13 +1026,7 @@ window.__ModuleLoader__.load({
         return set;
       }, [roots]);
 
-      const filtered = useMemo(() => {
-        const needle = search.trim().toLowerCase();
-        if (needle === "") return skills;
-        return skills.filter((skill) => {
-          return [skill.name, skill.description, skill.path, skill.source].some((field) => String(field || "").toLowerCase().includes(needle));
-        });
-      }, [skills, search]);
+      const filtered = useMemo(() => filterSkills(skills, search), [skills, search]);
 
       const installed = useMemo(
         () => filtered.filter((skill) => writableSources.has(skill.source) && skill.exists),
@@ -1460,21 +1137,28 @@ window.__ModuleLoader__.load({
           h("div", { className: "dsm-meta" }, t("toolbar.count", { n: totals.skills || 0 })),
           ),
           h("div", { className: "dsm-searchWrap" },
-            h(IconSearch, null),
+            h(IconSearch, { className: "dsm-searchIcon" }),
             h("input", {
               className: "dsm-search",
               value: search,
               placeholder: t("toolbar.search"),
               onChange: (event) => setSearch(event.target.value),
             }),
+            search
+              ? h("button", {
+                type: "button",
+                className: "dsm-searchClear",
+                "aria-label": t("toolbar.clearSearch"),
+                title: t("toolbar.clearSearch"),
+                onClick: () => setSearch(""),
+              }, h(IconClose, null))
+              : null,
           ),
         ),
 
         h("div", { className: "dsm-sectionHead" },
           h("div", { className: "dsm-sectionTitle" }, t("section.installed"), h("span", { className: "dsm-sectionCount" }, String(installed.length))),
           h("div", { className: "dsm-actions" },
-            h("button", { type: "button", className: "dsm-importBtn", onClick: () => setShowImport(true) },
-              h(IconImport, null), h("span", null, t("action.import"))),
             IconButton({ className: "dsm-iconBtn", label: t("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null)),
           ),
         ),
@@ -1513,7 +1197,6 @@ window.__ModuleLoader__.load({
           : null,
 
         detail ? h(DetailModal, { t, skill: detail, cwd, onClose: () => setDetail(null) }) : null,
-        showImport ? h(ImportModal, { t, cwd, scopeKind: scope.kind, onClose: () => setShowImport(false), onImported: () => loadRef.current() }) : null,
         confirmRemove
           ? h(Modal, { onClose: () => setConfirmRemove(null), label: t("delete.title") },
             h("div", { className: "dsm-modalHead" },
@@ -1597,6 +1280,7 @@ window.__ModuleLoader__.load({
     exports.__pure = Object.freeze({
       parseInline,
       parseMarkdown,
+      filterSkills,
       scopeTextOf,
       translationChunks,
       localeDict: LOCALE_DICT,
