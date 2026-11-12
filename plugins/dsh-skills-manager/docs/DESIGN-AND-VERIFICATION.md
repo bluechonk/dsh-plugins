@@ -390,6 +390,16 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 
 验证：`npm run check` 通过，`npm test` 54 项全绿；新增「内置技能从注册表取正文」与 `filterSkills` 实时过滤单测。
 
-## 十四、回滚
+## 十四、client 半模块化与构建、翻译缓存（2026-11-12）
+
+- **为什么要拆**：DSH 的 client 产物是被 `__ModuleLoader__` 的 `factory(require)` 包裹的单文件（官方约定，见 `cordis-plugin-development` 技能的 `templates/decoration/client.js`），但源码可以按职责拆分。此前 1300 余行全在一个 `client/client.js` 里，改一处要通读全篇。
+- **怎么拆**：源码在 `src/client/`（runtime / api / i18n / translate / markdown / icons / styles / components / detail / panel / pure 共 11 个模块），仓库根的 `scripts/build-client.mjs` 用 esbuild 打包成 `client/client.js`。装插件只需要产物，esbuild 是仓库根的 devDependency。
+- **React 从哪来**：产物里没有 ESM import，React 由宿主注入，所以模块统一从 `runtime.js` 取 `h` 与 hooks；`bindReact` 在工厂里调用一次。
+- **host 半**：拆出 `lib/http.js`（同源守卫、JSON 响应、请求体读取）与 `lib/scan.js`（目录扫描、文件清单），`lib/index.js` 只剩装配、路由与缓存。
+- **翻译缓存**：`/translate` 把「目标语言 + 原文 → 译文」落盘到 profile 目录的 `skills-manager-translation-cache.json`（条目上限 300，超出按写入序丢最旧的），下次直接命中；请求带 `force: true` 时绕过缓存重译并覆盖。客户端在「译文」档显示「重新翻译」按钮。
+
+验证：`npm run check` 16 个文件通过，`npm test` 57 项全绿；新增「翻译缓存命中 / force 覆盖」HTTP 单测与 `mergeChunks` 纯函数单测。
+
+## 十五、回滚
 
 `plugin_manager remove_bundle`（目标 `@bluechonk/dsh-skills-manager`），或在 profile 的 `cordis.patch.yml` 里把 `@bluechonk/dsh-skills-manager` 行置为 `disabled: true`。插件自身不写任何持久化数据（仅在 profile 目录留一份 `skills-manager.log` 审计日志）。

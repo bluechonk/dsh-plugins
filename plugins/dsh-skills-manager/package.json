@@ -33,6 +33,8 @@
     "lib/index.js",
     "lib/roots.js",
     "lib/frontmatter.js",
+    "lib/http.js",
+    "lib/scan.js",
     "client/client.js",
     "cordis.patch.yml",
     "locale/en.json",
@@ -42,7 +44,7 @@
   ],
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "check": "node --check lib/index.js && node --check lib/roots.js && node --check lib/frontmatter.js && node --check client/client.js"
+    "check": "node scripts/check.mjs"
   },
   "keywords": [
     "deepseek-harness",

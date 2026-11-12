@@ -37,7 +37,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 | 内置分组 | 运行时注册与随包内置的技能只读展示，按来源分组；**内置技能的正文从宿主注册表读取**（打包在 `app.asar` 里的技能没有本地文件） |
 | 搜索 | 随输入实时过滤（名称 / 描述 / 路径 / 来源），不用回车；有内容时右侧出现清除按钮 |
 | 详情弹窗 | 标题 +「Skill」徽章；描述（frontmatter 的 `description`，Markdown 渲染）；**文件内容**（SKILL.md 正文，Markdown 渲染的滚动卡片，形态对齐 Codex 技能页）；范围（个人 / 项目名 / 内置）、文件路径（行内等宽路径 + 复制图标） |
-| 翻译 | 标题栏一个 `[原文 | 译文]` 分段按钮，**默认原文**，每次打开详情都从原文开始（不持久化）。切到「译文」才翻译**描述与正文**（技能名是标识符，不翻译），Markdown 结构与代码块保留。长文本分块后并发翻译（并发上限 3），**译好一块立即替换该块**，不必等全部完成；块级缓存，反复开关不重复请求。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道）；翻译中或失败时在正文上方给一条浅底提示（带图标，文案精简），未启用 `dsh-experimental-cot-translation-bundle` 时提示「翻译服务未启用」并退回原文 |
+| 翻译 | 标题栏一个 `[原文 | 译文]` 分段按钮，**默认原文**，每次打开详情都从原文开始（不持久化）。切到「译文」才翻译**描述与正文**（技能名是标识符，不翻译），Markdown 结构与代码块保留。长文本分块后并发翻译（并发上限 3），**译好一块立即替换该块**，不必等全部完成。结果**落盘缓存**（`~/.dsh/profiles/<profile>/skills-manager-translation-cache.json`），下次打开直接命中、不再请求；选中「译文」时标题栏出现「重新翻译」按钮，点击会绕过缓存重译并覆盖旧缓存。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道）；翻译中或失败时在正文上方给一条浅底提示（带图标，文案精简），未启用 `dsh-experimental-cot-translation-bundle` 时提示「翻译服务未启用」并退回原文 |
 
 ![技能详情弹窗](docs/images/02-skill-detail-dialog.png)
 
@@ -151,10 +151,19 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 plugins/dsh-skills-manager/
 ├─ package.json          # dsh.bundle.patch + dsh.client{platform:web}
 ├─ cordis.patch.yml      # loader 插入行（id / name 均为 @bluechonk/dsh-skills-manager）
-├─ lib/index.js          # host 半：根解析、扫描、路由、写操作
-├─ lib/roots.js          # 根解析与项目根探测（纯函数）
-├─ lib/frontmatter.js    # frontmatter 解析与调用策略（两个键）改写（纯函数）
-├─ client/client.js      # client 半：侧边栏导航行 + 主面板 + 详情弹窗
+├─ lib/                  # host 半（ESM，可自由拆分）
+│  ├─ index.js           #   装配：路由、翻译缓存、槽位注册
+│  ├─ http.js            #   同源守卫 / JSON 响应 / 请求体读取
+│  ├─ scan.js            #   技能根扫描与文件清单
+│  ├─ roots.js           #   根解析与项目根探测（纯函数）
+│  └─ frontmatter.js     #   frontmatter 解析与改写（纯函数）
+├─ src/client/           # client 半源码（按职责分模块）
+│  ├─ index.js           #   入口：__ModuleLoader__ 工厂
+│  ├─ runtime.js         #   React 绑定（宿主注入）
+│  ├─ api.js / i18n.js / translate.js
+│  ├─ markdown.js / icons.js / styles.js / components.js
+│  └─ detail.js / panel.js / pure.js
+├─ client/client.js      # client 半产物（单文件 factory，由构建生成，不要手改）
 ├─ locale/{en,zh}.json   # 插件管理器元数据（meta.title / meta.description）
 ├─ icon.svg              # 原创图标
 ├─ docs/                 # 设计与验证记录、实机截图、变更记录
@@ -164,9 +173,13 @@ plugins/dsh-skills-manager/
 ## 开发
 
 ```bash
-npm test          # node:test 单测（54 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 客户端纯函数 / i18n）
-npm run check     # 语法检查（lib 与 client）
+npm install           # 在仓库根目录，装 esbuild（仅构建需要）
+npm run build         # 在仓库根目录，把 src/client/ 打包成 client/client.js
+npm test              # node:test 单测（57 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 翻译缓存 / 客户端纯函数 / i18n）
+npm run check         # 语法检查（lib / client / src）
 ```
+
+**为什么 client 半有源码和产物两份**：DSH 的 client 产物是被 `__ModuleLoader__` 的 `factory(require)` 包裹的单文件（官方约定，见 `cordis-plugin-development` 技能的 `templates/decoration/client.js`）。源码按职责拆在 `src/client/`，构建期用 esbuild 打包成 `client/client.js`；装插件的人只需要产物，esbuild 是仓库根的 devDependency。
 
 推送门禁在 dsh-plugins 仓库根目录：`.githooks/pre-push` 会在 WSL（Ubuntu）里跑与 CI 等价的 `npm run check && npm test`，
 不通过就中止推送（换机器克隆后需 `npm run hooks:install` 重新启用）。

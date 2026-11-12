@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { globalRootsFor, isManagedRoot, normalizeCwd, projectRootOf, projectRootsFor, realWithinRoot, rootKindOf, withinRoot } from '../lib/roots.js'
-import { collectSkillFiles, discoverLocalSkills } from '../lib/index.js'
+import { collectSkillFiles, discoverLocalSkills } from '../lib/scan.js'
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), 'dsm-test-'))
