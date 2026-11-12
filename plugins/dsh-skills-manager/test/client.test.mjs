@@ -35,7 +35,7 @@ assert.ok(captured !== null && captured.__pure !== undefined, '桩物化失败�
 const P = captured.__pure
 
 test('__pure 导出面固定（防导出漂移）', () => {
-  assert.deepEqual(Object.keys(P).sort(), ['fallbackT', 'filterSkills', 'interpolate', 'localeDict', 'localeNs', 'localizeError', 'parseInline', 'parseMarkdown', 'scopeTextOf', 'tr', 'translationChunks'])
+  assert.deepEqual(Object.keys(P).sort(), ['fallbackT', 'filterSkills', 'interpolate', 'localeDict', 'localeNs', 'localizeError', 'mergeChunks', 'parseInline', 'parseMarkdown', 'scopeTextOf', 'tr', 'translationChunks'])
   assert.ok(Object.isFrozen(P))
 })
 
@@ -202,6 +202,23 @@ test('filterSkills 随输入实时过滤（无需回车确认）', () => {
   assert.deepEqual(P.filterSkills(skills, 'bundled').map((s) => s.name), ['office-pptx']);
   assert.deepEqual(P.filterSkills(skills, '/x/office').map((s) => s.name), ['office-pptx']);
   assert.deepEqual(P.filterSkills(skills, 'zzz').map((s) => s.name), []);
+});
+
+test('mergeChunks 译好多少替换多少，未译好的块保留原文', () => {
+  const chunks = ['# 标题\n\n', '第一段\n\n', '第二段'];
+  // 一块都没译好 → 原文
+  assert.equal(P.mergeChunks(chunks, [null, null, null]), chunks.join(''));
+  // 只译好第一块 → 只替换那一块
+  assert.equal(P.mergeChunks(chunks, ['# Title\n\n', null, null]), '# Title\n\n第一段\n\n第二段');
+  // 三块都译好 → 全部替换
+  assert.equal(P.mergeChunks(chunks, ['# Title\n\n', 'Para one\n\n', 'Para two']), '# Title\n\nPara one\n\nPara two');
+  // 空数组安全
+  assert.equal(P.mergeChunks([], []), '');
+});
+
+test('translationChunks 的块拼接等于原文（mergeChunks 按位替换的前提）', () => {
+  const text = '# 标题\n\n第一段\n\n第二段\n\n```js\nconst a = 1;\n\nconst b = 2;\n```\n';
+  assert.equal(P.translationChunks(text, 3500).join(''), text);
 });
 
 test('scopeTextOf 按来源给出范围文案', () => {
