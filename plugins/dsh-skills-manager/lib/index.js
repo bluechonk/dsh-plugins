@@ -17,13 +17,10 @@ import { homedir } from 'node:os'
 
 import {
   diagnoseFrontmatter,
-  invocationOf,
   isLosslessUtf8,
   isValidSkillName,
   normalizeSkillFrontmatter,
   parseFrontmatter,
-  removeLegacyInvocationKeys,
-  setSkillInvocation,
 } from './frontmatter.js'
 import {
   globalRootsFor,
@@ -310,7 +307,6 @@ export function discoverLocalSkills(roots) {
         isFlat: !isBundle,
         root: root.label,
         rootPath: root.path,
-        invocation: invocationOf(frontmatter),
         // DSH 兼容性诊断：缺 description 或含旧式调用键的技能，DSH 会整个文件忽略。
         issues: diagnoseFrontmatter(frontmatter).issues,
         fileCount: info ? info.files.length : 0,
@@ -354,11 +350,9 @@ function readTextHead(path, limit) {
 /** 已知的外部 Agent 技能目录（用于「导入外部 Agent 技能」）。 */
 export function externalAgentRoots(home = homedir()) {
   return [
+    { id: 'zcode', label: 'ZCode', path: join(home, '.zcode', 'skills') },
     { id: 'codex', label: 'Codex CLI', path: join(home, '.codex', 'skills') },
     { id: 'claude', label: 'Claude Code', path: join(home, '.claude', 'skills') },
-    { id: 'gemini', label: 'Gemini CLI', path: join(home, '.gemini', 'skills') },
-    { id: 'qwen', label: 'Qwen Code', path: join(home, '.qwen', 'skills') },
-    { id: 'zcode', label: 'ZCode', path: join(home, '.zcode', 'skills') },
   ]
 }
 
@@ -705,9 +699,6 @@ export function apply(ctx, config = {}) {
       if (existing) {
         if (typeof summary.description === 'string' && summary.description !== '') existing.description = summary.description
         if (typeof summary.provider === 'string') existing.provider = summary.provider
-        // 本地刚解析的 frontmatter 是磁盘真值：注册表的目录有缓存（watcher 失效前是旧值），
-        // 覆盖它会让「已禁用」在界面上回弹。只有本地没解析出调用策略时才用注册表的值。
-        if (!existing.invocation && summary.invocation) existing.invocation = summary.invocation
         existing.inRegistry = true
         continue
       }
@@ -722,7 +713,6 @@ export function apply(ctx, config = {}) {
         dir: summary.path ? dirname(summary.path) : null,
         root: summary.source,
         rootPath: null,
-        invocation: summary.invocation || { modelInvocable: true, userInvocable: true },
         fileCount: 0,
         bytes: 0,
         isBundle: false,
@@ -858,8 +848,6 @@ export function apply(ctx, config = {}) {
     const totals = {
       skills: skills.length,
       installed: installed.length,
-      modelInvocable: skills.filter((skill) => !skill.invocation || skill.invocation.modelInvocable !== false).length,
-      userInvocable: skills.filter((skill) => !skill.invocation || skill.invocation.userInvocable !== false).length,
       missing: skills.filter((skill) => !skill.exists && !skill.embedded).length,
     }
     let clientBundlePath = null
@@ -965,69 +953,6 @@ export function apply(ctx, config = {}) {
     child.unlink()
     log('opened directory: ' + target)
     sendJson(response, 200, { ok: true, opened: dir })
-  }
-
-  /**
-   * 启停：改写 frontmatter 的调用策略（DSH 原生语义）。
-   * 停用要同时写 `disable-model-invocation: true` 与 `user-invocable: false`，
-   * 否则用户仍能在对话里点名调用，技能内容照样注入。
-   */
-  const toggleRoute = async (request, response) => {
-    const payload = await readJsonBody(request)
-    const name = typeof payload.name === 'string' ? payload.name : ''
-    const disabled = payload.disabled === true
-    const { skills } = await listSkills(resolveCwd(payload.cwd))
-    const skill = findSkill(skills, name)
-    if (!skill) return sendError(response, 404, '找不到技能：' + name, undefined, 'skill-not-found', { name })
-    if (!skill.path || !existsSync(skill.path)) return sendError(response, 400, '该技能没有可改写的 SKILL.md', undefined, 'skill-not-writable')
-    if (!isManagedRoot(skill.source)) return sendError(response, 400, '内置或运行时技能不可改写', undefined, 'skill-readonly')
-    if (insideNodeModules(skill.path)) return sendError(response, 400, '官方包内置技能不可改写', undefined, 'skill-readonly')
-    if (!skill.rootPath || !withinRoot(skill.path, skill.rootPath) || !realWithinRoot(skill.path, skill.rootPath)) {
-      return sendError(response, 403, '拒绝改写技能根之外的路径', undefined, 'outside-root')
-    }
-    let raw
-    try {
-      raw = readFileSync(skill.path)
-    } catch (error) {
-      return sendError(response, 500, '读取 SKILL.md 失败：' + String(error && error.message ? error.message : error))
-    }
-    const text = raw.toString('utf8')
-    // 非 UTF-8（如 GBK）文件一旦按 UTF-8 读写，中文会变成 U+FFFD 且不可逆——直接拒绝改写。
-    if (!isLosslessUtf8(raw)) {
-      return sendError(response, 400, 'SKILL.md 不是 UTF-8 编码，已拒绝改写以免损坏内容', undefined, 'not-utf8')
-    }
-    let next
-    try {
-      next = setSkillInvocation(text, { modelInvocable: !disabled, userInvocable: !disabled })
-    } catch (error) {
-      return sendError(response, 400, String(error && error.message ? error.message : error))
-    }
-    // 旧式调用键（disableModelInvocation 等）会让 DSH 忽略整个文件：开关必须顺手清掉，
-    // 否则「停用」对 DSH 毫无意义——技能压根没被加载。
-    const legacy = removeLegacyInvocationKeys(next)
-    next = legacy.text
-    if (next === text) {
-      return sendJson(response, 200, { ok: true, changed: false, name, disabled })
-    }
-    try {
-      // 写前再确认目标不是链接：扫描与写入之间可能被换成 junction。
-      const st = lstatSync(skill.path)
-      if (st.isSymbolicLink()) return sendError(response, 403, '目标已被替换为链接，拒绝改写', undefined, 'outside-root')
-      // 先写临时文件再原子替换：中途失败不会把用户的 SKILL.md 写成半截。
-      const temp = skill.path + '.dsm-tmp'
-      writeFileUtf8(temp, next)
-      renameSync(temp, skill.path)
-    } catch (error) {
-      try {
-        rmSync(skill.path + '.dsm-tmp', { force: true })
-      } catch {
-        /* 临时文件清理失败不影响主流程 */
-      }
-      return sendError(response, 500, '写入 SKILL.md 失败：' + String(error && error.message ? error.message : error))
-    }
-    invalidateSkillsCache()
-    log((disabled ? 'disabled ' : 'enabled ') + name + ' (' + skill.path + ')' + (legacy.removed.length > 0 ? ' legacy-keys-removed:' + legacy.removed.join(',') : ''))
-    sendJson(response, 200, { ok: true, changed: true, name, disabled, removedLegacyKeys: legacy.removed })
   }
 
   /** 删除：只允许受管根下的技能；软链只删链接。 */
@@ -1192,7 +1117,6 @@ export function apply(ctx, config = {}) {
     post(`${API_BASE}/body`, bodyRoute)
     post(`${API_BASE}/translate`, translateRoute)
     post(`${API_BASE}/reveal`, revealRoute)
-    post(`${API_BASE}/toggle`, toggleRoute)
     post(`${API_BASE}/remove`, removeRoute)
     post(`${API_BASE}/import`, importRoute)
 

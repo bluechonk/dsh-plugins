@@ -1,21 +1,12 @@
-// SKILL.md 的 YAML frontmatter 解析与「模型可调用」开关改写。
+// SKILL.md 的 YAML frontmatter 解析与归一化。
 //
 // 只做最小必要：解析顶层标量键（含引号、折叠/字面量块），以及在不动其余内容的前提下
-// 增删 `disable-model-invocation` / `user-invocable` 两行。DSH 对这两个键采用严格布尔语法。
+// 补 name/description、删掉 DSH 已废弃的旧式调用键。DSH 对调用键采用严格布尔语法。
 //
-// 两条硬约束（都是踩过的坑）：
-//  1. frontmatter 的结束标记必须是行首的 `---`；块标量里缩进的 `---` 是内容，不是结束标记。
-//  2. 写回必须保真：保留 BOM 与原换行风格（CRLF / LF），否则一次开关就会把用户整份
-//     SKILL.md 的行尾改掉（Windows 上尤其刺眼）。
+// 硬约束（踩过的坑）：frontmatter 的结束标记必须是行首的 `---`；
+// 块标量里缩进的 `---` 是内容，不是结束标记。
 
 const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-
-/** 判断是否为 DSH 认可的「禁用模型调用」布尔写法。 */
-export function isDisabledFlag(value) {
-  if (value === undefined || value === null) return false
-  const text = String(value).trim().toLowerCase()
-  return text === 'true' || text === 'yes' || text === 'on' || text === '1'
-}
 
 /**
  * 解析布尔字面量；无法识别时返回 undefined（交由调用方取缺省语义）。
@@ -105,59 +96,6 @@ export function parseFrontmatter(text) {
 }
 
 /**
- * 设置技能的调用策略，其余内容逐字保留。
- *
- * 停用写 `disable-model-invocation: true` 与 `user-invocable: false`；启用则两行都删掉
- * （缺省即「模型可调用、用户可调用」）。
- *
- * 两个键必须一起写：DSH 用 modelInvocable / userInvocable 分别把守两条入口——
- * 只写 `disable-model-invocation` 时模型确实无法自行加载，但用户仍能在对话里点名调用
- * （`agent/pre-step` 只检查 `isUserInvocable`），技能内容照样被注入，开关就成了「关了没关」。
- *
- * 写回必须保真：保留原文件的 BOM 与换行风格（CRLF / LF），否则一次开关就会把
- * 用户整份 SKILL.md 的行尾改掉（Windows 上尤其刺眼）。
- * @param {string} text 原始 SKILL.md 文本
- * @param {{ modelInvocable?: boolean, userInvocable?: boolean }} policy 目标策略；
- *   未给出的键保持原样（部分更新），给出 false 写禁用键、给出 true 删除对应键。
- * @returns {string} 改写后的文本
- */
-export function setSkillInvocation(text, { modelInvocable, userInvocable } = {}) {
-  const source = String(text)
-  const bom = source.startsWith('\uFEFF') ? '\uFEFF' : ''
-  const body = bom ? source.slice(1) : source
-  const eol = dominantEol(body)
-  const lines = body.split(/\r\n|\n/)
-  const end = findFrontmatterEnd(lines)
-  if (end < 0) throw new Error('SKILL.md 缺少 YAML frontmatter')
-
-  // 先处理 frontmatter：摘掉要改写的旧键（含重复行），记住第一处的位置，新值插回原位置。
-  const keys = ['disable-model-invocation', 'user-invocable']
-  const head = []
-  let insertAt = -1
-  for (let i = 0; i <= end; i += 1) {
-    let handled = false
-    if (i > 0 && i < end) {
-      const match = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(lines[i])
-      if (match && keys.includes(match[1])) {
-        handled = true
-        if (insertAt < 0) insertAt = head.length
-        // 未指定的键原样保留，避免「只改模型侧」顺手把用户侧改成默认值。
-        const policy = match[1] === 'disable-model-invocation' ? modelInvocable : userInvocable
-        if (policy === undefined) head.push(lines[i])
-      }
-    }
-    if (!handled) head.push(lines[i])
-  }
-  if (insertAt < 0) insertAt = head.length - 1
-  const additions = []
-  if (modelInvocable === false) additions.push('disable-model-invocation: true')
-  if (userInvocable === false) additions.push('user-invocable: false')
-  // frontmatter 之后的正文逐字拼回。
-  const result = [...head.slice(0, insertAt), ...additions, ...head.slice(insertAt), ...lines.slice(end + 1)]
-  return bom + result.join(eol)
-}
-
-/**
  * 判定主导换行风格：出现次数多的那种胜出；没有换行时按 LF。
  * （混合换行的文件不该被整体归一化到另一种风格。）
  * @param {string} text
@@ -168,18 +106,6 @@ export function dominantEol(text) {
   const crlf = (source.match(/\r\n/g) || []).length
   const lf = (source.match(/(?<!\r)\n/g) || []).length
   return crlf > lf ? '\r\n' : '\n'
-}
-
-/** 从 frontmatter 派生技能的调用策略（与 DSH 的解析语义一致）。 */
-export function invocationOf(frontmatter) {
-  const data = frontmatter && typeof frontmatter.data === 'object' ? frontmatter.data : {}
-  // disable-model-invocation: true 才禁用模型调用；user-invocable: false 才禁掉用户调用。
-  const modelDisabled = parseBoolean(data['disable-model-invocation']) === true
-  const userDisabled = parseBoolean(data['user-invocable']) === false
-  return {
-    modelInvocable: !modelDisabled,
-    userInvocable: !userDisabled,
-  }
 }
 
 /** 技能名必须是 kebab-case，且长度受限（避免 ENAMETOOLONG）。 */
@@ -339,37 +265,4 @@ export function normalizeSkillFrontmatter(text, options = {}) {
   rebuilt.push('---')
   const rest = lines.slice(end + 1)
   return { text: bom + rebuilt.concat(rest).join(eol), changes: [...new Set(changes)], description }
-}
-
-/**
- * 移除 DSH 不认的旧式调用键（逐行删除，其余内容逐字保留）。
- * 开关操作顺手做这件事：留着旧键的技能，DSH 会整个忽略，开关就等于没用。
- * @param {string} text 原始 SKILL.md 文本
- * @returns {{ text: string, removed: string[] }}
- */
-export function removeLegacyInvocationKeys(text) {
-  const source = String(text)
-  const bom = source.startsWith('\uFEFF') ? '\uFEFF' : ''
-  const body = bom ? source.slice(1) : source
-  const eol = dominantEol(body)
-  const lines = body.split(/\r\n|\n/)
-  const end = findFrontmatterEnd(lines)
-  if (end < 0) return { text: source, removed: [] }
-  const removed = []
-  const kept = []
-  for (let i = 0; i <= end; i += 1) {
-    const line = lines[i]
-    if (i > 0 && i < end) {
-      const match = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line)
-      if (match && LEGACY_INVOCATION_KEYS.includes(match[1])) {
-        removed.push(match[1])
-        continue
-      }
-    }
-    kept.push(line)
-  }
-  // frontmatter 之后的正文必须原样留下。
-  for (let i = end + 1; i < lines.length; i += 1) kept.push(lines[i])
-  if (removed.length === 0) return { text: source, removed: [] }
-  return { text: bom + kept.join(eol), removed }
 }

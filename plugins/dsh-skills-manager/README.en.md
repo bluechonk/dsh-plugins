@@ -6,7 +6,7 @@ A DeepSeek Harness plugin that adds a **Skills** panel to the sidebar, alongside
 
 ![Skills panel in the sidebar](docs/images/01-sidebar-skills-panel.png)
 
-Clicking the row opens the full panel (scope switching, search, enable switches, detail dialog, import and create):
+Clicking the row opens the full panel (scope switching, search, detail dialog, import):
 
 ![Skills panel](docs/images/10-skills-main-panel.png)
 
@@ -32,11 +32,11 @@ Package name, loader row id and client module id all use the `@bluechonk` scope;
 | Scope dropdown | "User · Local" shows **only** the global `~/.dsh/skills`, the user-level `~/.agents/skills` and the preset built-ins; a "Workspaces" group lists every workspace, and picking one shows **only that workspace's** `<workspace>/.dsh/skills` and `<workspace>/.agents/skills` (global and user-level skills are not mixed in). Switching workspaces only rescans that workspace |
 | Skill count | "Skills N" at the top is the number of skills visible in the current scope |
 | Search | Filters live by name, description and path |
-| Installed list | Name + description + enable switch + delete button; the switch writes both `disable-model-invocation: true` and `user-invocable: false` (DSH guards model loading and user invocation with these two keys separately) and also drops the legacy invocation keys DSH no longer accepts; deletion is limited to managed roots |
-| Compatibility hint | DSH requires both `name` and `description` in the frontmatter and rejects legacy invocation keys — skills that break those rules are flagged "Not loaded by DSH" and their switch is disabled (the host ignores such files entirely) |
+| Installed list | Name + description + delete button; deletion is limited to managed roots |
+| Compatibility hint | DSH requires both `name` and `description` in the frontmatter and rejects legacy invocation keys — skills that break those rules are flagged "Not loaded by DSH" (the host ignores such files entirely) |
 | Built-in group | Skills registered at runtime or shipped inside a package are shown read-only, grouped by source |
-| More menu | "Import" external agent skills: sources cover Codex CLI / Claude Code / Gemini CLI / Qwen Code / ZCode (`~/.zcode/skills`); expand a source to see every skill with its name and description, pick individually or per source; a copy import fills in a missing description and removes legacy invocation keys |
-| Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in), status (Enabled / Disabled), and the file path (inline monospace path + copy icon) |
+| Import button | The "Import" button at the top right of the list: sources cover ZCode / Codex CLI / Claude Code; expand a source to see every skill with its name and description, pick individually or per source; a copy import fills in a missing description and removes legacy invocation keys |
+| Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in) and the file path (inline monospace path + copy icon) |
 | Translation | On by default in the detail dialog: the **description and body** are translated into Chinese (the skill name is an identifier and is never translated), keeping Markdown structure and code blocks. Use "View original" to compare, or the "Translate" button in the title bar to turn it off. It reuses the host's `translator` service (the same Bing/Google channel as the reasoning translation); when `dsh-experimental-cot-translation-bundle` is not enabled it reports unavailability and falls back to the original text |
 
 ![Skill detail dialog](docs/images/02-skill-detail-dialog.png)
@@ -45,9 +45,7 @@ The same dialog translated (description and body in Chinese, switchable back to 
 
 ![Translated skill detail](docs/images/11-skill-detail-translation.png)
 
-More menu and import dialog:
-
-![More menu](docs/images/03-more-menu.png)
+Import button and import dialog:
 
 ![Import external agent skills](docs/images/04-import-external-agent-skills.png)
 
@@ -71,7 +69,7 @@ Back to Chinese (same page, no reload):
 
 ## Design baseline
 
-The interface is aligned with the **ZCode** "Settings → Skills" page: 30px/600 title, 896px centered content column, 12px borderless cards, 65px rows, 36px icon tiles, a 32×18 switch (on = foreground track with background thumb), and a 36px/12px/256px search field.
+The interface is aligned with the **ZCode** "Settings → Skills" page: 30px/600 title, 896px centered content column, 12px borderless cards, 65px rows, 36px icon tiles, and a 36px/12px/256px search field.
 
 The measured values and the item-by-item comparison live in chapter 6 of [docs/DESIGN-AND-VERIFICATION.md](docs/DESIGN-AND-VERIFICATION.md); the ZCode reference captures are in [docs/reference/](docs/reference/).
 
@@ -141,9 +139,7 @@ The host half registers same-origin routes on `ctx.webServer` (all guarded by lo
 | GET | `/dsh-skills-manager/state` | Skill list, root inventory, workspace list, totals |
 | POST | `/dsh-skills-manager/body` | One skill's frontmatter, body and file list |
 | POST | `/dsh-skills-manager/reveal` | Open the skill folder in the system file manager |
-| POST | `/dsh-skills-manager/toggle` | Enable / disable (rewrites the frontmatter) |
 | POST | `/dsh-skills-manager/remove` | Delete a skill under a managed root |
-| POST | `/dsh-skills-manager/create` | Create a skill folder |
 | POST | `/dsh-skills-manager/import` | Import from an external folder (symlink / copy) |
 | GET | `/dsh-skills-manager/external` | Scan external agent skill folders |
 
@@ -154,7 +150,7 @@ Error responses carry a stable `code` (plus `params` for dynamic parts such as t
 - Write targets are always resolved by the host from the skills it scanned, so **no arbitrary absolute path from the client is accepted**; a project target must come from a registered workspace.
 - Deletion is limited to managed roots (`user-dsh` / `user-agents` / `project-dsh` / `project-agents`); a symlink is only unlinked, never its target; the target is checked against the managed root itself; the UI asks for confirmation and shows the path.
 - Skills shipped inside official packages (under `node_modules`, detected through the real path) refuse modification and deletion so official packages are never damaged.
-- The switch writes both `disable-model-invocation: true` and `user-invocable: false`: DSH guards "the model loads it by itself" and "the user invokes it by name" with these two keys separately, so writing only the first leaves the skill usable in conversations (its content is still injected). `~/.agents/skills` is shared with other agent tools, so both keys also apply to Claude Code and friends. Files that are not UTF-8 (e.g. GBK) are refused rather than being corrupted.
+- A copy import only rewrites the copied file, never the source folder; files that are not UTF-8 (e.g. GBK) are left alone rather than being corrupted.
 - The plugin writes no persistent data of its own, only a `skills-manager.log` audit trail in the profile directory; it never reaches the network.
 
 ## Layout
@@ -176,7 +172,7 @@ plugins/dsh-skills-manager/
 ## Development
 
 ```bash
-npm test          # node:test unit tests (58 cases: frontmatter / roots / discovery / HTTP layer / client pure functions / i18n)
+npm test          # node:test unit tests (55 cases: frontmatter / roots / discovery / HTTP layer / client pure functions / i18n)
 npm run check     # syntax check (lib and client)
 ```
 

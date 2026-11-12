@@ -135,11 +135,11 @@ test('跨站来源与非常规来源地址都被拒', async () => {
 test('非法 JSON 与 null 载荷返回 400（不是 500）', async () => {
   const host = makeHost()
   try {
-    const broken = await call(host, '/dsh-skills-manager/toggle', { method: 'POST', body: '{not json' })
+    const broken = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: '{not json' })
     assert.equal(broken.statusCode, 400)
-    const nullBody = await call(host, '/dsh-skills-manager/toggle', { method: 'POST', body: 'null' })
+    const nullBody = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: 'null' })
     assert.equal(nullBody.statusCode, 400)
-    const arrayBody = await call(host, '/dsh-skills-manager/toggle', { method: 'POST', body: '[]' })
+    const arrayBody = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: '[]' })
     assert.equal(arrayBody.statusCode, 400)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
@@ -150,7 +150,7 @@ test('超大请求体返回 413', async () => {
   const host = makeHost()
   try {
     const big = 'x'.repeat(1024 * 1024 + 1024)
-    const response = await call(host, '/dsh-skills-manager/toggle', { method: 'POST', body: JSON.stringify({ name: 'demo', description: big }) })
+    const response = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: JSON.stringify({ name: 'demo', description: big }) })
     assert.equal(response.statusCode, 413)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
@@ -165,61 +165,16 @@ test('写操作后状态立刻反映（写操作要清掉扫描缓存）', async
     writeFileSync(join(dir, 'SKILL.md'), '---\nname: fresh-skill\ndescription: 新写的技能\n---\n', 'utf8')
     // 先读一次，把扫描缓存热起来
     const first = (await call(host, '/dsh-skills-manager/state')).json()
-    const before = first.skills.find((skill) => skill.name === 'fresh-skill')
-    assert.ok(before, '新写的技能应出现在面板里')
-    assert.equal(before.invocation.modelInvocable, true)
-
-    const disabled = await call(host, '/dsh-skills-manager/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'fresh-skill', disabled: true }),
-    })
-    assert.equal(disabled.statusCode, 200)
-    // 不等 TTL：紧接着读状态就要看到停用后的策略
-    const second = (await call(host, '/dsh-skills-manager/state')).json()
-    const after = second.skills.find((skill) => skill.name === 'fresh-skill')
-    assert.equal(after.invocation.modelInvocable, false)
-    assert.equal(after.invocation.userInvocable, false)
-  } finally {
-    rmSync(host.home, { recursive: true, force: true })
-  }
-})
-
-test('写操作全链路：禁用 → 启用 → 删除', async () => {
-  const host = makeHost()
-  try {
-    const dir = join(host.skillsRoot, 'demo-skill')
-    mkdirSync(dir, { recursive: true })
-    const file = join(dir, 'SKILL.md')
-    writeFileSync(file, '---\nname: demo-skill\ndescription: 自检技能\n---\n', 'utf8')
-
-    const disabled = await call(host, '/dsh-skills-manager/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'demo-skill', disabled: true }),
-    })
-    assert.equal(disabled.statusCode, 200)
-    const off = readFileSync(file, 'utf8')
-    // 两个键必须一起写：只写 model 键时用户仍能在对话里点名调用。
-    assert.match(off, /disable-model-invocation: true/)
-    assert.match(off, /user-invocable: false/)
-
-    const enabled = await call(host, '/dsh-skills-manager/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'demo-skill', disabled: false }),
-    })
-    assert.equal(enabled.statusCode, 200)
-    const on = readFileSync(file, 'utf8')
-    assert.doesNotMatch(on, /disable-model-invocation/)
-    assert.doesNotMatch(on, /user-invocable/)
+    assert.ok(first.skills.some((skill) => skill.name === 'fresh-skill'))
 
     const removed = await call(host, '/dsh-skills-manager/remove', {
       method: 'POST',
-      body: JSON.stringify({ name: 'demo-skill' }),
+      body: JSON.stringify({ name: 'fresh-skill' }),
     })
     assert.equal(removed.statusCode, 200)
-    // 技能目录应已被删除
-    assert.equal(existsSync(join(host.skillsRoot, 'demo-skill')), false)
-    const state = await call(host, '/dsh-skills-manager/state')
-    assert.equal(state.json().skills.some((skill) => skill.name === 'demo-skill'), false)
+    // 不等 TTL：紧接着读状态就要看到删除结果
+    const second = (await call(host, '/dsh-skills-manager/state')).json()
+    assert.equal(second.skills.some((skill) => skill.name === 'fresh-skill'), false)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
@@ -241,31 +196,6 @@ test('删除根目录下平铺的 skill.md 不会抹掉整个根', async () => {
     assert.ok(readFileSync(join(host.skillsRoot, 'other-skill', 'SKILL.md'), 'utf8').includes('other-skill'))
     const state = await call(host, '/dsh-skills-manager/state')
     assert.ok(state.json().skills.some((skill) => skill.name === 'other-skill'))
-  } finally {
-    rmSync(host.home, { recursive: true, force: true })
-  }
-})
-
-test('非 UTF-8 的 SKILL.md 拒绝改写且字节不变', async () => {
-  const host = makeHost()
-  try {
-    const dir = join(host.skillsRoot, 'gbk-skill')
-    mkdirSync(dir, { recursive: true })
-    // GBK 的「你好」
-    const gbk = Buffer.concat([
-      Buffer.from('---\nname: gbk-skill\ndescription: ', 'latin1'),
-      Buffer.from([0xc4, 0xe3, 0xba, 0xc3]),
-      Buffer.from('\n---\n', 'latin1'),
-    ])
-    writeFileSync(join(dir, 'SKILL.md'), gbk)
-    const before = readFileSync(join(dir, 'SKILL.md'))
-
-    const response = await call(host, '/dsh-skills-manager/toggle', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'gbk-skill', disabled: true }),
-    })
-    assert.equal(response.statusCode, 400)
-    assert.deepEqual(readFileSync(join(dir, 'SKILL.md')), before)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }

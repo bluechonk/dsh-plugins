@@ -2,6 +2,13 @@
 
 本文件记录 dsh-skills-manager 的版本变更。
 
+## 未发布
+
+- 去掉技能的启用 / 停用开关：列表行不再有开关，详情弹窗不再显示「已启用 / 已禁用」，
+  `/toggle` 路由与 frontmatter 的 `disable-model-invocation` / `user-invocable` 改写逻辑一并移除。
+- 「导入」从「…」溢出菜单移出，改为列表右上角常驻按钮。
+- 导入来源收敛为 ZCode / Codex CLI / Claude Code。
+
 ## 0.1.0
 
 首个版本。侧边栏「技能」独立面板，集中管理当前加载的全部技能。

@@ -8,7 +8,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 ![侧边栏技能面板](docs/images/01-sidebar-skills-panel.png)
 
-点开导航行后是完整面板（作用域切换、搜索、启停开关、详情弹窗、导入外部技能）：
+点开导航行后是完整面板（作用域切换、搜索、详情弹窗、导入外部技能）：
 
 ![技能主面板](docs/images/10-skills-main-panel.png)
 
@@ -32,11 +32,11 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 | 作用域下拉 | 「用户 · 本机」只显示全局 `~/.dsh/skills`、用户级 `~/.agents/skills` 与预设内置技能；「工作区」分组列出各工作区，**选中某个工作区就只显示该工作区的** `<工作路径>/.dsh/skills` 与 `<工作路径>/.agents/skills`（不混入全局/用户级）。切换工作区只重扫该工作区 |
 | 技能计数 | 顶部「技能 N」为当前作用域可见的技能总数 |
 | 搜索 | 按名称、描述、路径实时过滤 |
-| 已安装列表 | 名称 + 描述 + 启用开关 + 删除按钮；开关同时写 `disable-model-invocation: true` 与 `user-invocable: false`（DSH 用这两个键分别把守模型调用与用户点名调用），并顺手清掉 DSH 已废弃的旧式调用键；删除只允许落在受管根之下 |
-| 兼容性提示 | DSH 要求 frontmatter 同时有 `name` 与 `description`，且不含旧式调用键——不满足的技能标「DSH 不加载」并把开关置灰（这类文件会被宿主整个忽略） |
+| 已安装列表 | 名称 + 描述 + 删除按钮；删除只允许落在受管根之下 |
+| 兼容性提示 | DSH 要求 frontmatter 同时有 `name` 与 `description`，且不含旧式调用键——不满足的技能标「DSH 不加载」（这类文件会被宿主整个忽略） |
 | 内置分组 | 运行时注册与随包内置的技能只读展示，按来源分组 |
-| 更多菜单 | 「导入」外部 Agent 技能：来源覆盖 Codex CLI / Claude Code / Gemini CLI / Qwen Code / ZCode（`~/.zcode/skills`），来源可展开，逐个技能展示名称与描述，可单选或整源勾选；复制导入会自动补齐缺失的 description 并移除旧式调用键 |
-| 详情弹窗 | 标题 +「Skill」徽章；描述（frontmatter 的 `description`，Markdown 渲染）；**文件内容**（SKILL.md 正文，Markdown 渲染的滚动卡片，形态对齐 Codex 技能页）；范围（个人 / 项目名 / 内置）、状态（已启用 / 已禁用）、文件路径（行内等宽路径 + 复制图标） |
+| 导入按钮 | 列表右上角「导入」按钮：来源覆盖 ZCode / Codex CLI / Claude Code，来源可展开，逐个技能展示名称与描述，可单选或整源勾选；复制导入会自动补齐缺失的 description 并移除旧式调用键 |
+| 详情弹窗 | 标题 +「Skill」徽章；描述（frontmatter 的 `description`，Markdown 渲染）；**文件内容**（SKILL.md 正文，Markdown 渲染的滚动卡片，形态对齐 Codex 技能页）；范围（个人 / 项目名 / 内置）、文件路径（行内等宽路径 + 复制图标） |
 | 翻译 | 详情弹窗默认开启翻译：**描述与正文**自动译成中文（技能名是标识符，不翻译），Markdown 结构与代码块保留；可点「看原文」对照，也可用标题栏的「翻译」按钮整体关掉。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道），未启用 `dsh-experimental-cot-translation-bundle` 时提示不可用并退回原文 |
 
 ![技能详情弹窗](docs/images/02-skill-detail-dialog.png)
@@ -45,9 +45,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 ![技能详情翻译](docs/images/11-skill-detail-translation.png)
 
-更多菜单与导入弹窗：
-
-![更多菜单](docs/images/03-more-menu.png)
+导入按钮与导入弹窗：
 
 ![导入外部 Agent 技能](docs/images/04-import-external-agent-skills.png)
 
@@ -71,7 +69,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 ## 设计基准
 
-界面按本机 **ZCode**「设置 → 技能」页对齐：标题 30px/600、内容列 896px 居中、卡片 12px 无描边、行高 65px、图标块 36px、开关 32×18（开=前景色轨 + 背景色钮）、搜索框 36px/12px/256px。
+界面按本机 **ZCode**「设置 → 技能」页对齐：标题 30px/600、内容列 896px 居中、卡片 12px 无描边、行高 65px、图标块 36px、搜索框 36px/12px/256px。
 实测参数与逐项对照见 [docs/DESIGN-AND-VERIFICATION.md](docs/DESIGN-AND-VERIFICATION.md) 第六章，ZCode 取材截图见 [docs/reference/](docs/reference/)。
 
 ## 覆盖的技能根
@@ -142,7 +140,6 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 | GET | `/dsh-skills-manager/state` | 技能列表、根清单、工作区列表、统计 |
 | POST | `/dsh-skills-manager/body` | 单个技能的 frontmatter、正文、文件清单 |
 | POST | `/dsh-skills-manager/reveal` | 在系统文件管理器中打开技能目录 |
-| POST | `/dsh-skills-manager/toggle` | 启用 / 禁用（改写 frontmatter） |
 | POST | `/dsh-skills-manager/remove` | 删除受管根下的技能 |
 | POST | `/dsh-skills-manager/import` | 从外部目录导入（软链 / 复制） |
 | GET | `/dsh-skills-manager/external` | 外部 Agent 技能目录扫描 |
@@ -152,7 +149,7 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 - 写操作的目标一律由宿主按「已扫描到的技能」反查得到，**不接受客户端传入的任意绝对路径**；项目落点只认已登记工作区。
 - 删除仅限受管根（`user-dsh` / `user-agents` / `project-dsh` / `project-agents`）；软链只删链接不删源；删除前校验目标不等于受管根本身；界面上有二次确认并列出路径。
 - 官方包内置技能（`node_modules` 内，按真实路径判定）拒绝改写与删除，避免破坏官方包。
-- 启停同时写 `disable-model-invocation: true` 与 `user-invocable: false`：DSH 用这两个键分别把守「模型自行加载」与「用户点名调用」两条入口，只写前者时用户仍能在对话里点名调用，技能内容照样被注入。`~/.agents/skills` 与其他 Agent 工具共享，这两个键对 Claude Code 等同样生效。非 UTF-8（如 GBK）编码的文件会被拒绝改写，避免内容被写成乱码。
+- 导入的复制模式只改写落地副本，不动源目录；非 UTF-8（如 GBK）编码的文件跳过归一化，避免内容被写成乱码。
 - 插件不写任何持久化数据，仅在 profile 目录留一份 `skills-manager.log` 审计日志；不联网、不上传。
 
 ## 目录结构
@@ -174,7 +171,7 @@ plugins/dsh-skills-manager/
 ## 开发
 
 ```bash
-npm test          # node:test 单测（67 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 客户端纯函数 / i18n）
+npm test          # node:test 单测（55 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 客户端纯函数 / i18n）
 npm run check     # 语法检查（lib 与 client）
 ```
 
@@ -188,7 +185,7 @@ npm run check     # 语法检查（lib 与 client）
 
 | 版本 | 要点 |
 |---|---|
-| 0.1.0 | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、启停、导入、删除 |
+| 0.1.0 | 首个版本：侧边栏「技能」面板，作用域切换、搜索、Markdown 详情与机器翻译、导入、删除 |
 
 发版节奏：一批用户可见的改动发一个版本，不随单次提交发版。详单见 [CHANGELOG.md](CHANGELOG.md)。
 
