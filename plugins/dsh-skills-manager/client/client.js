@@ -144,6 +144,8 @@ window.__ModuleLoader__.load({
       ".dsm-segBtn:hover{color:var(--dsw-alias-label-primary)}",
       ".dsm-segBtn[data-on=\"true\"]{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base)}",
       ".dsm-translateBar{display:flex;align-items:center;gap:8px;margin:-2px 0 10px;min-height:20px;font-size:12.5px;color:var(--dsw-alias-label-secondary)}",
+      ".dsm-translateError{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;border:1px solid color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 35%, transparent);background:color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 12%, transparent);color:var(--dsw-alias-state-warning,var(--dsw-alias-label-secondary));font-size:12.5px;line-height:1.5}",
+      ".dsm-translateError svg{width:14px;height:14px;flex:none}",
     ].join("");
 
     /** 注入样式（按 data-plugin-css 去重，热重载原位替换）。 */
@@ -173,6 +175,7 @@ window.__ModuleLoader__.load({
     const IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
     const IconTrash = (p) => h(Svg, p, h("path", { d: "M4 7h16M10 11v6M14 11v6" }), h("path", { d: "M6 7l1 13h10l1-13" }), h("path", { d: "M9 7V4h6v3" }));
     const IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
+    const IconWarning = (p) => h(Svg, p, h("path", { d: "M12 3 2.5 19.5h19L12 3Z" }), h("path", { d: "M12 10v4" }), h("path", { d: "M12 17.5h.01" }));
     const IconCheck = (p) => h(Svg, p, h("path", { d: "m5 13 4 4 10-10" }));
     const IconCopy = (p) => h(Svg, p, h("rect", { x: 9, y: 9, width: 11, height: 11, rx: 2 }), h("path", { d: "M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" }));
     const IconSparkle = (p) => h(Svg, p, h("path", { d: "M12 3c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" }), h("path", { d: "M18 15c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z" }));
@@ -498,8 +501,6 @@ window.__ModuleLoader__.load({
         "detail.sourceText": "原文",
         "detail.translatedText": "译文",
         "detail.translating": "翻译中…",
-        "detail.translationFailed": "翻译失败，已显示原文",
-        "detail.translationUnavailable": "翻译服务不可用（需启用 cot-translation 插件）",
         "delete.title": "删除技能",
         "delete.question": "确定删除技能「{name}」？",
         "delete.note": "技能目录下的全部文件都会被移除，此操作不可撤销。",
@@ -534,10 +535,10 @@ window.__ModuleLoader__.load({
         "error.target-exists": "目标已存在同名技能：{name}",
         "error.no-local-dir": "该技能没有可打开的本地目录",
         "error.dir-missing": "目录不存在：{path}",
-        "error.translator-unavailable": "翻译服务不可用（需启用 cot-translation 插件）",
-        "error.translation-failed": "翻译失败，请稍后重试",
-        "error.TRANSLATION_TIMEOUT": "翻译超时，请稍后重试",
-        "error.TRANSLATION_TEXT_LIMIT": "文本过长，无法翻译",
+        "error.translator-unavailable": "翻译服务未启用",
+        "error.translation-failed": "翻译失败，显示原文",
+        "error.TRANSLATION_TIMEOUT": "翻译超时",
+        "error.TRANSLATION_TEXT_LIMIT": "文本过长",
         "error.TRANSLATION_HTTP_ERROR": "翻译服务请求失败",
         "error.TRANSLATION_INVALID_RESPONSE": "翻译结果无效",
         "error.TRANSLATION_REQUEST_FAILED": "翻译请求失败",
@@ -584,8 +585,6 @@ window.__ModuleLoader__.load({
         "detail.sourceText": "Original",
         "detail.translatedText": "Translated",
         "detail.translating": "Translating…",
-        "detail.translationFailed": "Translation failed; the original text is shown",
-        "detail.translationUnavailable": "Translation is unavailable (enable the cot-translation plugin)",
         "delete.title": "Delete Skill",
         "delete.question": "Delete skill \u201c{name}\u201d?",
         "delete.note": "All files in the skill folder will be removed. This cannot be undone.",
@@ -620,10 +619,10 @@ window.__ModuleLoader__.load({
         "error.target-exists": "A skill with the same name already exists at the target: {name}",
         "error.no-local-dir": "This skill has no local folder to open",
         "error.dir-missing": "Folder not found: {path}",
-        "error.translator-unavailable": "Translation is unavailable (enable the cot-translation plugin)",
-        "error.translation-failed": "Translation failed, please try again later",
-        "error.TRANSLATION_TIMEOUT": "Translation timed out, please try again later",
-        "error.TRANSLATION_TEXT_LIMIT": "The text is too long to translate",
+        "error.translator-unavailable": "Translation service not enabled",
+        "error.translation-failed": "Translation failed — showing the original",
+        "error.TRANSLATION_TIMEOUT": "Translation timed out",
+        "error.TRANSLATION_TEXT_LIMIT": "Text too long",
         "error.TRANSLATION_HTTP_ERROR": "The translation service request failed",
         "error.TRANSLATION_INVALID_RESPONSE": "The translation result is invalid",
         "error.TRANSLATION_REQUEST_FAILED": "The translation request failed",
@@ -895,7 +894,8 @@ window.__ModuleLoader__.load({
             translating
               ? h("span", null, t("detail.translating"))
               : translateError
-                ? h("span", { className: "dsm-error" }, translateError)
+                ? h("div", { className: "dsm-translateError" },
+                  h(IconWarning, null), h("span", null, translateError))
                 : null,
           ),
           h("div", { className: "dsm-label" }, t("detail.description")),
