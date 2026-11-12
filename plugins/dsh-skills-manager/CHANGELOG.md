@@ -4,7 +4,10 @@
 
 ## 未发布
 
-- 翻译改为增量返回：长文本分块后并发翻译（并发上限 3），**译好一块立即替换该块**，不再等全部完成；块级缓存，反复开关不重复请求。
+- 翻译改为增量返回：长文本分块后并发翻译（并发上限 3），**译好一块立即替换该块**，不再等全部完成。
+- 翻译结果落盘缓存（`skills-manager-translation-cache.json`），下次打开直接命中；「重新翻译」按钮绕过缓存重译并覆盖旧缓存。
+- client 半拆分为 `src/client/` 多模块（runtime / api / i18n / translate / markdown / icons / styles / components / detail / panel / pure），由仓库根的 esbuild 构建成单文件 `client/client.js`。
+- host 半拆出 `lib/http.js`（同源守卫、JSON 响应、请求体）与 `lib/scan.js`（目录扫描、文件清单）。
 
 ## 0.1.1
 

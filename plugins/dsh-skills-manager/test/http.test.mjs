@@ -62,8 +62,15 @@ function makeHost(options = {}) {
     },
     workspaceRegistry: { list: () => workspaces },
     profileContext: { dir: home },
+    translator: options.translator === undefined ? null : options.translator,
     skills: {
-      list: async () => registrySkills.map((skill) => ({ name: skill.name, description: skill.description, source: 'bundled', provider: 'test' })),
+      list: async () => registrySkills.map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        source: 'bundled',
+        provider: 'test',
+        ...(skill.path ? { path: skill.path } : {}),
+      })),
       get: async (name) => registrySkills.find((skill) => skill.name === name) || undefined,
     },
   }
@@ -113,6 +120,24 @@ test('GET /state 返回技能清单与统计', async () => {
   }
 })
 
+test('POST /body 返回 frontmatter 与正文', async () => {
+  const host = makeHost()
+  try {
+    const dir = join(host.skillsRoot, 'demo')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: demo\ndescription: 演示\n---\n\n# 正文\n内容', 'utf8')
+    const response = await call(host, '/dsh-skills-manager/body', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'demo' }),
+    })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().frontmatter.description, '演示')
+    assert.match(response.json().body, /# 正文/)
+  } finally {
+    rmSync(host.home, { recursive: true, force: true })
+  }
+})
+
 test('内置技能（无本地文件）从注册表取正文', async () => {
   const host = makeHost({
     registrySkills: [
@@ -129,6 +154,49 @@ test('内置技能（无本地文件）从注册表取正文', async () => {
     assert.equal(response.statusCode, 200)
     assert.equal(response.json().frontmatter.description, '内置技能')
     assert.match(response.json().body, /# 正文/)
+  } finally {
+    rmSync(host.home, { recursive: true, force: true })
+  }
+})
+
+test('注册表技能带路径时按路径反推根', async () => {
+  const host = makeHost({
+    registrySkills: [
+      { name: 'bundled-skill', description: '内置技能', content: '---\nname: bundled-skill\ndescription: 内置技能\n---\n\n# 正文', path: '/opt/preset/bundled-skill/SKILL.md' },
+    ],
+  })
+  try {
+    const response = await call(host, '/dsh-skills-manager/state')
+    assert.equal(response.statusCode, 200)
+    const skill = response.json().skills.find((item) => item.name === 'bundled-skill')
+    assert.equal(skill.rootPath, '/opt/preset')
+  } finally {
+    rmSync(host.home, { recursive: true, force: true })
+  }
+})
+
+test('翻译结果落盘缓存，第二次直接命中；force 重译并覆盖', async () => {
+  const calls = []
+  const translator = {
+    resolve: ({ text }) => ({ text }),
+    translate: async (spec) => { calls.push(spec.text); return '译:' + spec.text },
+  }
+  const host = makeHost({ translator })
+  try {
+    const path = '/dsh-skills-manager/translate'
+    const first = await call(host, path, { method: 'POST', body: JSON.stringify({ text: 'hello', targetLanguage: 'zh' }) })
+    assert.equal(first.statusCode, 200)
+    assert.equal(first.json().text, '译:hello')
+    assert.equal(first.json().cached, false)
+
+    const second = await call(host, path, { method: 'POST', body: JSON.stringify({ text: 'hello', targetLanguage: 'zh' }) })
+    assert.equal(second.json().text, '译:hello')
+    assert.equal(second.json().cached, true)
+    assert.equal(calls.length, 1, '命中缓存不该再请求 translator')
+
+    const forced = await call(host, path, { method: 'POST', body: JSON.stringify({ text: 'hello', targetLanguage: 'zh', force: true }) })
+    assert.equal(forced.json().cached, false)
+    assert.equal(calls.length, 2, 'force 应绕过缓存重新请求')
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }

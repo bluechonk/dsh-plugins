@@ -11,14 +11,21 @@
 // 派生自 pengxiaozi/dsh-plugins 的 dsh-skill-panel（MIT），此处在其只读能力之上补齐
 // 范围切换与写操作，并重写为独立实现。
 
-import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
 import {
-  diagnoseFrontmatter,
-  isValidSkillName,
-  parseFrontmatter,
-} from './frontmatter.js'
+  BODY_LIMIT_BYTES,
+  BodyTooLargeError,
+  BadRequestError,
+  errorStatusOf,
+  isLoopbackRequest,
+  readJsonBody,
+  sendError,
+  sendJson,
+} from './http.js'
+import { collectSkillFiles, discoverLocalSkills, readTextHead } from './scan.js'
+import { parseFrontmatter } from './frontmatter.js'
 import {
   globalRootsFor,
   isManagedRoot,
@@ -35,314 +42,7 @@ import {
 export const name = '@bluechonk/dsh-skills-manager'
 
 const API_BASE = '/dsh-skills-manager'
-const BODY_LIMIT_BYTES = 1024 * 1024
 const CONTENT_PREVIEW_BYTES = 400 * 1024
-const SKIP_DIRS = new Set(['.git', 'node_modules', '__pycache__', '.svn'])
-
-/* ------------------------------------------------------------------ */
-/* 基础工具                                                            */
-/* ------------------------------------------------------------------ */
-
-/** 同源 + 回环守卫：只接受本机同源请求。 */
-export function isLoopbackRequest(request) {
-  const address = request.socket && request.socket.remoteAddress
-  if (address !== '127.0.0.1' && address !== '::1' && address !== '::ffff:127.0.0.1') return false
-  const host = request.headers.host
-  if (typeof host !== 'string') return false
-  let hostUrl
-  try {
-    hostUrl = new URL('http://' + host)
-  } catch {
-    return false
-  }
-  if (hostUrl.hostname !== '127.0.0.1' && hostUrl.hostname !== 'localhost' && hostUrl.hostname !== '[::1]') return false
-  if (request.headers['sec-fetch-site'] === 'cross-site') return false
-  const origin = request.headers.origin
-  if (origin === undefined) return true
-  try {
-    return new URL(origin).host === hostUrl.host
-  } catch {
-    return false
-  }
-}
-
-function sendJson(response, status, value, headers) {
-  const body = JSON.stringify(value)
-  response.statusCode = status
-  response.setHeader('content-type', 'application/json; charset=utf-8')
-  response.setHeader('cache-control', 'no-store')
-  if (headers) {
-    for (const [key, headerValue] of Object.entries(headers)) response.setHeader(key, headerValue)
-  }
-  response.end(body)
-}
-
-/**
- * 错误响应。code 是稳定的机器可读标识（客户端据此取对应语言的文案），
- * params 是文案里的动态部分（如技能名）。
- */
-function sendError(response, status, message, headers, code, params) {
-  const body = { ok: false, error: String(message) }
-  if (code) body.code = code
-  if (params) body.params = params
-  sendJson(response, status, body, headers)
-}
-
-/** 把内部异常映射成合适的 HTTP 状态码。 */
-function errorStatusOf(error) {
-  if (error && error.name === 'BodyTooLargeError') return 413
-  if (error && error.name === 'BadRequestError') return 400
-  return 500
-}
-
-class BodyTooLargeError extends Error {
-  constructor() {
-    super('请求体超过 1MB 上限')
-    this.name = 'BodyTooLargeError'
-  }
-}
-
-class BadRequestError extends Error {
-  constructor(message) {
-    super(message)
-    this.name = 'BadRequestError'
-  }
-}
-
-function readBody(request) {
-  return new Promise((resolvePromise, reject) => {
-    const chunks = []
-    let total = 0
-    let rejected = false
-    request.on('data', (chunk) => {
-      if (rejected) return
-      total += chunk.length
-      if (total > BODY_LIMIT_BYTES) {
-        rejected = true
-        // 不 destroy 连接：客户端要能收到 413 的响应体，而不是连接被重置。
-        request.resume()
-        reject(new BodyTooLargeError())
-        return
-      }
-      chunks.push(chunk)
-    })
-    request.on('end', () => {
-      if (!rejected) resolvePromise(Buffer.concat(chunks).toString('utf8'))
-    })
-    request.on('error', reject)
-  })
-}
-
-async function readJsonBody(request) {
-  const raw = await readBody(request)
-  if (raw.trim() === '') return {}
-  let payload
-  try {
-    payload = JSON.parse(raw)
-  } catch {
-    throw new BadRequestError('请求体不是合法 JSON')
-  }
-  // JSON 的 null / 数组 / 数字都不是对象载荷：统一按 400 处理，避免后续取字段抛 TypeError。
-  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new BadRequestError('请求体必须是 JSON 对象')
-  }
-  return payload
-}
-
-/* ------------------------------------------------------------------ */
-/* 目录扫描                                                            */
-/* ------------------------------------------------------------------ */
-
-/**
- * 递归统计技能目录占用的文件（跳过 .git / node_modules 等）。
- * @param {string} baseDir
- * @param {Array<{ rel: string, abs: string, size: number }>} collected
- * @param {{ maxFiles: number, maxBytes: number }} limits
- */
-function walk(baseDir, relDir, collected, limits) {
-  let names
-  try {
-    names = readdirSync(baseDir)
-  } catch {
-    return
-  }
-  names.sort()
-  for (const entry of names) {
-    if (collected.files.length >= limits.maxFiles || collected.bytes >= limits.maxBytes) {
-      collected.truncated = true
-      return
-    }
-    if (SKIP_DIRS.has(entry)) continue
-    const abs = join(baseDir, entry)
-    const rel = relDir === '' ? entry : relDir + '/' + entry
-    let st
-    try {
-      // 用 lstat：符号链接不跟随，避免把技能目录外的文件算进清单（也不误跟随到别处）。
-      st = lstatSync(abs)
-    } catch {
-      continue
-    }
-    if (st.isSymbolicLink()) {
-      collected.files.push({ rel, abs, size: 0, link: true })
-      continue
-    }
-    if (st.isDirectory()) {
-      walk(abs, rel, collected, limits)
-      continue
-    }
-    if (!st.isFile()) continue
-    if (collected.bytes + st.size > limits.maxBytes) {
-      collected.truncated = true
-      return
-    }
-    collected.files.push({ rel, abs, size: st.size })
-    collected.bytes += st.size
-  }
-}
-
-/**
- * 收集一个技能在磁盘上占用的文件。
- *
- * isBundle 必须由调用方按「该项是不是目录」给出：靠文件名猜会把根目录下平铺的
- * skill.md 当成目录 bundle，删除时连整个技能根一起删掉。
- * @param {string} skillPath SKILL.md 或平铺 .md 的绝对路径
- * @param {boolean} isBundle 该项是否为目录 bundle
- */
-export function collectSkillFiles(skillPath, isBundle = false) {
-  if (typeof skillPath !== 'string' || skillPath === '' || !existsSync(skillPath)) return null
-  let st
-  try {
-    st = lstatSync(skillPath)
-  } catch {
-    return null
-  }
-  if (!st.isFile()) return null
-  if (!isBundle) {
-    return { dir: null, isBundle: false, files: [{ rel: basename(skillPath), abs: skillPath, size: st.size }], bytes: st.size, truncated: false }
-  }
-  const baseDir = dirname(skillPath)
-  const collected = { files: [], bytes: 0, truncated: false }
-  walk(baseDir, '', collected, { maxFiles: 600, maxBytes: 40 * 1024 * 1024 })
-  return { dir: baseDir, isBundle: true, files: collected.files, bytes: collected.bytes, truncated: collected.truncated }
-}
-
-/**
- * 扫描一个技能根：仅一层 `<root>/<name>/SKILL.md` 与 `<root>/<name>.md`（与官方提供方同规则）。
- * @param {Array<{ label: string, path: string, rank: number }>} roots
- */
-export function discoverLocalSkills(roots) {
-  const out = []
-  const seen = new Set()
-  // 按 rank 升序扫描：rank 越小优先级越高（项目根优先于用户根），与 DSH 注册表的裁决顺序一致。
-  // 否则同名技能会显示成低优先级那份，面板停用的文件与 DSH 实际加载的文件不是同一个。
-  const ordered = [...roots].sort((a, b) => (a.rank || 0) - (b.rank || 0))
-  for (const root of ordered) {
-    let names
-    try {
-      names = readdirSync(root.path)
-    } catch {
-      continue
-    }
-    names.sort()
-    for (const entry of names) {
-      if (entry.startsWith('.')) continue
-      if (SKIP_DIRS.has(entry)) continue
-      const abs = join(root.path, entry)
-      let st
-      try {
-        st = lstatSync(abs)
-      } catch {
-        continue
-      }
-      let mdPath = null
-      let isBundle = false
-      if (st.isSymbolicLink()) {
-        // 链接目录：内容照读（DSH 也会跟随），但标记出来，写操作另有真实路径校验。
-        let target
-        try {
-          target = statSync(abs)
-        } catch {
-          continue
-        }
-        if (!target.isDirectory()) continue
-        const candidate = join(abs, 'SKILL.md')
-        if (!existsSync(candidate)) continue
-        mdPath = candidate
-        isBundle = true
-      } else if (st.isDirectory()) {
-        const candidate = join(abs, 'SKILL.md')
-        if (!existsSync(candidate)) continue
-        mdPath = candidate
-        isBundle = true
-      } else if (st.isFile() && entry.toLowerCase().endsWith('.md')) {
-        mdPath = abs
-        isBundle = false
-      } else {
-        continue
-      }
-      const text = readTextHead(mdPath, 65536)
-      if (text === null) continue
-      const frontmatter = parseFrontmatter(text)
-      if (!frontmatter) continue
-      const name = frontmatter.data.name
-      if (!isValidSkillName(name)) continue
-      const description = typeof frontmatter.data.description === 'string' ? frontmatter.data.description : ''
-      if (description === '') continue
-      if (seen.has(name)) continue
-      seen.add(name)
-      const info = collectSkillFiles(mdPath, isBundle)
-      out.push({
-        name,
-        description,
-        whenToUse: typeof frontmatter.data.whenToUse === 'string' ? frontmatter.data.whenToUse : undefined,
-        provider: 'filesystem',
-        source: root.label,
-        rank: root.rank,
-        path: mdPath,
-        // bundle 的目录是技能自己的目录；平铺 .md 没有独立目录（dir 留给宿主在删除时判定）。
-        dir: isBundle ? abs : dirname(mdPath),
-        isFlat: !isBundle,
-        root: root.label,
-        rootPath: root.path,
-        // DSH 兼容性诊断：缺 description 或含旧式调用键的技能，DSH 会整个文件忽略。
-        issues: diagnoseFrontmatter(frontmatter).issues,
-        fileCount: info ? info.files.length : 0,
-        bytes: info ? info.bytes : 0,
-        isBundle,
-        truncated: info ? info.truncated : false,
-        exists: info !== null,
-        inRegistry: false,
-        embedded: false,
-      })
-    }
-  }
-  return out
-}
-
-/* ------------------------------------------------------------------ */
-/* 外部 Agent 技能目录                                                */
-/* ------------------------------------------------------------------ */
-
-/** 只读取文件头部若干字节：超大 SKILL.md 不必整file读进内存。 */
-function readTextHead(path, limit) {
-  let fd
-  try {
-    fd = openSync(path, 'r')
-    const buffer = Buffer.alloc(limit)
-    const read = readSync(fd, buffer, 0, limit, 0)
-    return buffer.subarray(0, read).toString('utf8')
-  } catch {
-    return null
-  } finally {
-    if (fd !== undefined) {
-      try {
-        closeSync(fd)
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* 插件主体                                                            */
@@ -367,6 +67,68 @@ export function apply(ctx, config = {}) {
     } catch {
       /* 仅诊断信息 */
     }
+  }
+
+  /**
+   * 翻译缓存：技能内容不常变，译好后会把「目标语言 + 原文 → 译文」落盘，
+   * 下次直接读缓存，不再请求宿主 translator。用户点「重新翻译」时强制重译并覆盖。
+     * 条目数设上限，超了按写入序丢最旧的，避免长期堆积。
+   */
+  const TRANSLATE_CACHE_FILE = join(profileDir, 'skills-manager-translation-cache.json')
+  const TRANSLATE_CACHE_LIMIT = 300
+  let translateCache = null
+  let translateCacheTimer = null
+
+  const translateCacheKey = (targetLanguage, text) => targetLanguage + '\n' + text
+
+  const readTranslateCache = () => {
+    if (translateCache !== null) return translateCache
+    try {
+      const parsed = JSON.parse(readFileSync(TRANSLATE_CACHE_FILE, 'utf8'))
+      translateCache = parsed && typeof parsed === 'object' && parsed.entries ? parsed.entries : {}
+    } catch {
+      translateCache = {}
+    }
+    return translateCache
+  }
+
+  const writeTranslateCache = () => {
+    if (translateCache === null) return
+    try {
+      mkdirSync(profileDir, { recursive: true })
+      const temp = TRANSLATE_CACHE_FILE + '.tmp'
+      writeFileSync(temp, JSON.stringify({ version: 1, entries: translateCache }), 'utf8')
+      renameSync(temp, TRANSLATE_CACHE_FILE)
+    } catch (error) {
+      log('translate cache write failed: ' + String(error && error.message ? error.message : error))
+    }
+  }
+
+  /** 落盘去重：合并连续写，避免每译一块就写一次文件。 */
+  const scheduleTranslateCacheWrite = () => {
+    if (translateCacheTimer !== null) clearTimeout(translateCacheTimer)
+    translateCacheTimer = setTimeout(() => {
+      translateCacheTimer = null
+      writeTranslateCache()
+    }, 200)
+    // 别让这个定时器拖住进程退出
+    if (typeof translateCacheTimer.unref === 'function') translateCacheTimer.unref()
+  }
+
+  const cacheGet = (key) => {
+    const entries = readTranslateCache()
+    return Object.prototype.hasOwnProperty.call(entries, key) ? entries[key] : undefined
+  }
+
+  const cachePut = (key, value) => {
+    const entries = readTranslateCache()
+    entries[key] = value
+    const keys = Object.keys(entries)
+    if (keys.length > TRANSLATE_CACHE_LIMIT) {
+      // 对象键按插入序，删最前面的即最早写入的
+      for (let i = 0; i < keys.length - TRANSLATE_CACHE_LIMIT; i += 1) delete entries[keys[i]]
+    }
+    scheduleTranslateCacheWrite()
   }
 
   // 技能清单缓存：面板每次刷新都全量重扫目录与文件，开销大；写操作后立即失效。
@@ -866,15 +628,23 @@ export function apply(ctx, config = {}) {
     const targetLanguage = typeof payload.targetLanguage === 'string' && payload.targetLanguage !== ''
       ? payload.targetLanguage
       : 'zh'
+    const force = payload.force === true
     if (text === '') return sendJson(response, 200, { ok: true, text: '' })
     const translator = ctx.get('translator')
     if (!translator || typeof translator.translate !== 'function' || typeof translator.resolve !== 'function') {
       return sendError(response, 503, '翻译服务不可用（需启用 cot-translation 插件）', undefined, 'translator-unavailable')
     }
+    const cacheKey = translateCacheKey(targetLanguage, text)
+    if (!force) {
+      const cached = cacheGet(cacheKey)
+      if (cached !== undefined) return sendJson(response, 200, { ok: true, text: cached, cached: true })
+    }
     try {
       const spec = translator.resolve({ text, targetLanguage })
       const translated = await translator.translate(spec)
-      sendJson(response, 200, { ok: true, text: typeof translated === 'string' ? translated : '' })
+      const result = typeof translated === 'string' ? translated : ''
+      cachePut(cacheKey, result)
+      sendJson(response, 200, { ok: true, text: result, cached: false })
     } catch (error) {
       // TranslationError 带稳定 code（超时/超长/HTTP 失败等），原样回传给客户端做本地化。
       const code = error && typeof error.code === 'string' ? error.code : 'translation-failed'
@@ -1019,6 +789,3 @@ export function apply(ctx, config = {}) {
 }
 
 /** 写文本（UTF-8）。 */
-function writeFileUtf8(path, content) {
-  writeFileSync(path, content, 'utf8')
-}

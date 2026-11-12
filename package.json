@@ -8,10 +8,14 @@
     "test": "node scripts/test-all.mjs",
     "index": "node scripts/sync-index.mjs",
     "index:check": "node scripts/sync-index.mjs --check",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "build": "node scripts/build-client.mjs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   },
   "license": "MIT"
 }
