@@ -401,7 +401,9 @@ window.__ModuleLoader__.load({
     const TRANSLATE_TARGET = "zh";
     /** 单块上限：宿主 translator 默认 maxTextChars=4000，留出余量避免被拒。 */
     const TRANSLATE_CHUNK_CHARS = 3500;
-    /** 翻译结果缓存：同一技能同一字段只译一次，反复开关弹窗不重复请求。 */
+    /** 并发上限：分块同时翻译，但别一次把宿主 translator 打满。 */
+    const TRANSLATE_CONCURRENCY = 3;
+    /** 块级缓存：同一块只译一次，反复开关弹窗不重复请求。 */
     const translationCache = new Map();
 
     /** 按空行把长文本切成不超过上限的块，逐块翻译后拼回。 */
@@ -429,21 +431,28 @@ window.__ModuleLoader__.load({
       return parts.filter((part) => part.trim() !== "");
     }
 
-    /** 翻译一段文本（带缓存）；失败直接抛出，由调用方决定怎么提示。 */
-    async function translateText(text) {
-      const key = TRANSLATE_TARGET + "\n" + text;
+    /**
+     * 把译好的块填回原文：done[i] 为 null 表示该块还没译好，保留原文。
+     * translationChunks 的块拼接起来等于原文，所以按位替换即可，未译好的块原样留下。
+     */
+    function mergeChunks(chunks, done) {
+      let out = "";
+      for (let i = 0; i < chunks.length; i += 1) {
+        const translated = done[i];
+        out += translated === null || translated === undefined ? chunks[i] : translated;
+      }
+      return out;
+    }
+
+    /** 翻译单个块（带缓存）；失败直接抛出，由调用方决定怎么提示。 */
+    async function translateChunk(chunk) {
+      const key = TRANSLATE_TARGET + "\n" + chunk;
       const cached = translationCache.get(key);
       if (cached !== undefined) return cached;
-      const chunks = translationChunks(text, TRANSLATE_CHUNK_CHARS);
-      if (chunks.length === 0) return text;
-      const out = [];
-      for (const chunk of chunks) {
-        const payload = await apiPost("/translate", { text: chunk, targetLanguage: TRANSLATE_TARGET });
-        out.push(typeof payload.text === "string" ? payload.text : "");
-      }
-      const joined = out.join("");
-      translationCache.set(key, joined);
-      return joined;
+      const payload = await apiPost("/translate", { text: chunk, targetLanguage: TRANSLATE_TARGET });
+      const text = typeof payload.text === "string" ? payload.text : "";
+      translationCache.set(key, text);
+      return text;
     }
 
     /* ---------------------------------------------------------------- */
@@ -799,16 +808,19 @@ window.__ModuleLoader__.load({
       const [copied, setCopied] = useState(null);
       // 翻译默认关闭：是否看译文由用户决定，且每次打开详情都从「原文」开始（不做持久化）。
       const [translateOn, setTranslateOn] = useState(false);
-      const [translating, setTranslating] = useState(false);
-      const [translated, setTranslated] = useState({ desc: "", content: "" });
+      // 分块进度：{ desc: { chunks, done }, content: { chunks, done } }，done[i] 为 null 表示该块还没译好。
+      const [progress, setProgress] = useState(null);
       const [translateError, setTranslateError] = useState(null);
+      // 同一套文本只译一次（把开关关掉再打开不应重新请求）。
+      const translatedKey = useRef(null);
       useEffect(() => {
         let alive = true;
         setDetail(null);
         setError(null);
         setCopied(null);
-        setTranslated({ desc: "", content: "" });
+        setProgress(null);
         setTranslateError(null);
+        translatedKey.current = null;
         apiPost("/body", { name: skill.name, cwd: props.cwd })
           .then((payload) => { if (alive) setDetail(payload); })
           .catch((err) => { if (alive) setError(localizeError(err)); });
@@ -834,38 +846,70 @@ window.__ModuleLoader__.load({
         : skill.description || "";
       const bodyText = detail && typeof detail.body === "string" ? detail.body.trim() : "";
 
-      // 翻译：描述与正文各译一次，结果缓存在 translationCache 里；失败只提示，不影响原文。
+      // 翻译：描述与正文各自分块，译好一块就替换一块，不必等全部完成。
       useEffect(() => {
         if (!translateOn) {
-          setTranslating(false);
+          setTranslateError(null);
           return undefined;
         }
-        if (!descriptionText && !bodyText) return undefined;
+        const fields = [["desc", descriptionText], ["content", bodyText]].filter(([, text]) => Boolean(text));
+        if (fields.length === 0) return undefined;
+
+        const signature = skill.name + "|" + props.cwd + "|" + descriptionText + "|" + bodyText;
+        if (translatedKey.current === signature) return undefined;
+        translatedKey.current = signature;
+
         let alive = true;
-        setTranslating(true);
         setTranslateError(null);
-        Promise.all([
-          descriptionText ? translateText(descriptionText) : Promise.resolve(""),
-          bodyText ? translateText(bodyText) : Promise.resolve(""),
-        ])
-          .then(([desc, content]) => {
-            if (!alive) return;
-            setTranslated({ desc, content });
-            setTranslating(false);
-          })
-          .catch((err) => {
-            if (!alive) return;
-            setTranslateError(localizeError(err));
-            setTranslating(false);
-          });
+        const next = {};
+        for (const [key, text] of fields) {
+          const chunks = translationChunks(text, TRANSLATE_CHUNK_CHARS);
+          next[key] = { chunks, done: new Array(chunks.length).fill(null) };
+        }
+        setProgress(next);
+
+        const runField = async (key) => {
+          const chunks = next[key].chunks;
+          let cursor = 0;
+          const worker = async () => {
+            while (cursor < chunks.length) {
+              const index = cursor;
+              cursor += 1;
+              let result;
+              try {
+                result = await translateChunk(chunks[index]);
+              } catch (error) {
+                if (!alive) return;
+                setTranslateError(localizeError(error));
+                return;
+              }
+              if (!alive) return;
+              setProgress((prev) => {
+                if (!prev || !prev[key]) return prev;
+                const done = prev[key].done.slice();
+                done[index] = result;
+                return { ...prev, [key]: { chunks: prev[key].chunks, done } };
+              });
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(TRANSLATE_CONCURRENCY, chunks.length) }, worker));
+        };
+
+        Promise.all(fields.map(([key]) => runField(key)));
         return () => { alive = false; };
       }, [skill.name, props.cwd, translateOn, detail]);
 
-      const hasTranslation = Boolean(translated.desc || translated.content);
-      // 翻译中 / 失败 / 关掉开关 / 正在看原文 —— 这几种情况都回落到原文。
-      const showTranslated = translateOn && !translating && !translateError && hasTranslation;
-      const descShown = showTranslated && translated.desc ? translated.desc : descriptionText;
-      const bodyShown = showTranslated && translated.content ? translated.content : bodyText;
+      // 还有块没译完就算「翻译中」；失败也继续显示已译好的部分。
+      const translating = translateOn
+        && (!progress || ["desc", "content"].some((key) => progress[key] && progress[key].done.some((value) => value === null)));
+      // 译好多少显示多少：未译好的块保留原文。
+      const viewOf = (key, original) => {
+        const field = progress && progress[key];
+        if (!field || !field.done.some((value) => value !== null)) return original;
+        return mergeChunks(field.chunks, field.done);
+      };
+      const descShown = translateOn ? viewOf("desc", descriptionText) : descriptionText;
+      const bodyShown = translateOn ? viewOf("content", bodyText) : bodyText;
 
       return h(Modal, { onClose: props.onClose, label: skill.name + " " + t("detail.titleSuffix") },
         h("div", { className: "dsm-modalHead" },
@@ -1281,6 +1325,7 @@ window.__ModuleLoader__.load({
       parseInline,
       parseMarkdown,
       filterSkills,
+      mergeChunks,
       scopeTextOf,
       translationChunks,
       localeDict: LOCALE_DICT,
