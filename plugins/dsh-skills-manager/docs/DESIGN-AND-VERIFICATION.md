@@ -8,7 +8,7 @@
 - 全局 `~/.agents/skills`（`user-agents`，rank 500）
 - 项目/工作区 `<projectRoot>/.dsh/skills`、`<projectRoot>/.agents/skills`（rank 100 / 200）
 
-界面按参考图实现：标题、作用域下拉、技能计数、搜索框、「已安装 N」分组、更多菜单（导入）、刷新、新建、行内开关与删除、详情弹窗（描述/范围/状态/文件路径）、导入外部 Agent 技能弹窗（全局/项目、软链/直接复制）。
+界面按参考图实现：标题、作用域下拉、技能计数、搜索框、「已安装 N」分组、导入按钮、刷新、行内删除、详情弹窗（描述/范围/文件路径）、导入外部 Agent 技能弹窗（全局/项目、软链/直接复制）。
 
 插件标识（包名、loader 行 id、client 模块 id 三者统一带 `@bluechonk` scope）：
 
@@ -43,13 +43,12 @@
 
 - 主面板：`sidebar.panellist`（order 30）导航行 + `main` keyed 页面（`.dsm-page` 自持滚动与内边距，896px 内容列居中）。
 - 作用域下拉：用户级 + 工作区分组（工作区清单来自宿主 `workspaceRegistry`）。
-- 详情弹窗严格对齐参考图，四段结构：
+- 详情弹窗严格对齐参考图，三段结构：
   1. **描述** —— 只渲染 frontmatter 的 `description`，按 **Markdown** 渲染（内置零依赖子集：标题、段落、列表、引用、代码块、行内代码、粗体/斜体/删除线、链接），独立滚动区（`max-height:210px`，原生滚动条），不显示原始 frontmatter；
   2. **范围** —— 个人 / 项目名 / 内置（项目技能取项目根末段目录名）；
-  3. **状态** —— 已启用 / 已禁用（按 `modelInvocable`）；
-  4. **文件路径** —— 行内等宽路径 + 复制图标，无边框卡片。
+  3. **文件路径** —— 行内等宽路径 + 复制图标，无边框卡片。
   不再出现「正文」「文件清单」等参考图之外的分段。
-- 导入弹窗：外部目录发现、全选与已选计数、软链/直接复制、导入到全局/项目。
+- 导入：列表右上角常驻「导入」按钮，来源覆盖 ZCode / Codex CLI / Claude Code；外部目录发现、全选与已选计数、软链/直接复制、导入到全局/项目。
 - 组件异常由 `ErrorBoundary` 兜底，避免拖塌整个面板。
 
 ## 四、验证记录
@@ -61,7 +60,7 @@ node --check lib/index.js lib/roots.js lib/frontmatter.js client/client.js   →
 node --test "test/**/*.test.mjs"                                             → 21 passed / 0 failed
 ```
 
-覆盖：frontmatter 解析（标量、引号、折叠块）、`disable-model-invocation` 增删幂等性、调用策略派生、项目根探测、根标签与 rank、目录扫描规则、禁用标记识别、文件统计、外部目录扫描。
+覆盖：frontmatter 解析（标量、引号、折叠块）、归一化改写、项目根探测、根标签与 rank、目录扫描规则、文件统计、外部目录扫描。
 
 ### 4.2 安装与注册
 
@@ -79,9 +78,9 @@ node --test "test/**/*.test.mjs"                                             →
 | 截图 | 验证点 |
 |---|---|
 | `01-sidebar-skills-panel.png` | 「技能」位于「使用统计」与「更多」之间，选中态高亮；点开后主面板显示标题、作用域下拉、「技能 N」、搜索与「已安装 N」列表 |
-| `10-skills-main-panel.png` | 桌面端实拍：点开「技能」后的完整主面板（标题、作用域下拉、「技能 N」、搜索、「已安装 N」列表与行内开关/删除） |
-| `02-skill-detail-dialog.png` | 四段结构：描述（仅描述正文，Markdown 渲染，独立滚动）、范围（个人）、状态（已启用）、文件路径（行内等宽路径 + 复制图标）；无「正文」「文件清单」 |
-| `03-more-menu.png` | 更多菜单弹出「导入」 |
+| `10-skills-main-panel.png` | 桌面端实拍：点开「技能」后的完整主面板（标题、作用域下拉、「技能 N」、搜索、「已安装 N」列表与行内删除按钮） |
+| `02-skill-detail-dialog.png` | 三段结构：描述（仅描述正文，Markdown 渲染，独立滚动）、范围（个人）、文件路径（行内等宽路径 + 复制图标）；无「正文」「文件清单」 |
+| `03-more-menu.png` | 改造前的「更多」溢出菜单（导入按钮现已移出，改为列表右上角常驻） |
 | `04-import-external-agent-skills.png` | 全局/项目切换、刷新、全选与已选计数、外部目录清单、软链/直接复制、导入到全局 |
 | `05-scope-dropdown.png` | 「用户 · 本机 ✓」+ 「工作区」分组（resume-site / modelmux / default-workspace） |
 
@@ -92,15 +91,13 @@ node --test "test/**/*.test.mjs"                                             →
 | 步骤 | 结果 |
 |---|---|
 | 新建 | ok=true，落盘 `~/.dsh/skills/dsm-self-test/SKILL.md`，列表立即出现（source=user-dsh） |
-| 禁用 | frontmatter 写入 `disable-model-invocation: true`，列表 `modelInvocable=false` |
-| 启用 | 该行被移除，`modelInvocable=true` |
 | 删除 | 列表不再出现，目录被清除 |
 
 ### 4.5 已知边界
 
 - 依赖包目录（`node_modules` 内）的 preset 内置技能只读：拒绝改写与删除，避免破坏官方包。
 - 软链在 Windows 上使用 junction（免管理员权限）；若目标目录被外部删除，链接会失效，需要重新导入。
-- 导入/删除/启停都会改动用户磁盘上的技能文件（开关写的是跨工具通用的 `disable-model-invocation` 键），界面上已注明，删除有二次确认。
+- 导入/删除会改动用户磁盘上的技能文件，界面上已注明，删除有二次确认。
 
 ## 五、代码评审与修复（2026-10-20）
 
@@ -167,12 +164,11 @@ node --test "test/**/*.test.mjs"                                             →
 | 搜索框 | 高 36px、圆角 12px、宽 256px、左内距 36px、14px | 同值 |
 | 小节标题 | 14px / 400，块下 16px | 同值 |
 | 操作按钮 | 28×28、圆角 8px、描边、底色透明 | 同值 |
-| 主按钮「新建」 | 高 28px、圆角 8px、反色（深色白底黑字 / 浅色黑底白字） | `label-primary` 底 + `bg-base` 字 |
+| 主按钮「导入」 | 高 28px、圆角 8px、描边、透明底 | `label-primary` 字 + `border-l1` 描边 |
 | 技能卡片 | 圆角 12px、无描边、深色 `rgba(255,255,255,.05)` / 浅色 `rgba(13,13,13,.03)` | `color-mix(label-primary 4%)` |
 | 行 | 高 65px、内距 12px 16px、间距 12px、行间细分隔线 | 同值 |
 | 图标块 | 36×36、圆角 12px、图标 60% 透明 | 同值 |
 | 名称 / 描述 | 14px/400/21px 与 12px/18px/60% | 同值 |
-| 开关 | 32×18、pill、内距 1px、钮 16px；开=前景色轨 + 背景色钮，关=前景色 30% | 同值 |
 
 ### 6.2 两套主题都成立的写法
 
@@ -386,6 +382,14 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 已知边界：DSH 每步重算技能目录，所以停用对**后续**轮次生效；但已经注入到当前会话历史里的
 技能内容不会被撤回，模型仍可能引用它。界面在开关的 `title` 里写明了这一点。
 
-## 十三、回滚
+## 十三、去掉启停开关、导入按钮移出折叠、来源收敛（2026-11-12）
+
+- 列表行去掉启用 / 停用开关，详情弹窗去掉「状态」段；`/toggle` 路由、`setSkillInvocation()`、`removeLegacyInvocationKeys()` 与 `invocation` 派生一并移除，`/state` 不再返回 `invocation` 与 `modelInvocable` / `userInvocable` 统计。
+- 「导入」从「…」溢出菜单移出，改为列表右上角常驻按钮。
+- 导入来源从五个（Codex / Claude / Gemini / Qwen / ZCode）收敛为 ZCode / Codex CLI / Claude Code。
+
+验证：`npm run check` 通过，`npm test` 55 项全绿；导入来源单测改为断言只剩三个。
+
+## 十四、回滚
 
 `plugin_manager remove_bundle`（目标 `@bluechonk/dsh-skills-manager`），或在 profile 的 `cordis.patch.yml` 里把 `@bluechonk/dsh-skills-manager` 行置为 `disabled: true`。插件自身不写任何持久化数据（仅在 profile 目录留一份 `skills-manager.log` 审计日志）。

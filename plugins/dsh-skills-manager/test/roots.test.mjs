@@ -77,22 +77,7 @@ test('discoverLocalSkills 只发现一层目录 bundle 与平铺 md', () => {
     const demo = found.find((skill) => skill.name === 'demo-skill')
     assert.equal(demo.description, '演示技能')
     assert.equal(demo.source, 'user-agents')
-    assert.equal(demo.invocation.modelInvocable, true)
     assert.equal(demo.isBundle, true)
-  } finally {
-    rmSync(base, { recursive: true, force: true })
-  }
-})
-
-test('discoverLocalSkills 识别禁用的模型调用标记', () => {
-  const base = tempDir()
-  try {
-    const root = join(base, 'skills')
-    mkdirSync(join(root, 'off-skill'), { recursive: true })
-    writeFileSync(join(root, 'off-skill', 'SKILL.md'), '---\nname: off-skill\ndescription: 已禁用\ndisable-model-invocation: true\n---\n', 'utf8')
-    const found = discoverLocalSkills([{ label: 'user-dsh', path: root, rank: 400 }])
-    assert.equal(found[0].invocation.modelInvocable, false)
-    assert.equal(found[0].invocation.userInvocable, true)
   } finally {
     rmSync(base, { recursive: true, force: true })
   }
@@ -207,11 +192,12 @@ test('scanExternalRoots 列出外部目录并标记不存在的目录', () => {
   }
 })
 
-test('externalAgentRoots 覆盖常见 Agent 目录（含 ZCode）', () => {
+test('externalAgentRoots 只覆盖 zcode / codex / claude 目录', () => {
   const roots = externalAgentRoots('C:/home')
   const ids = roots.map((root) => root.id)
-  for (const id of ['codex', 'claude', 'gemini', 'qwen', 'zcode']) assert.ok(ids.includes(id), `缺少来源 ${id}`)
+  assert.deepEqual(ids, ['zcode', 'codex', 'claude'])
   assert.equal(roots.find((root) => root.id === 'codex').path, join('C:/home', '.codex', 'skills'))
+  assert.equal(roots.find((root) => root.id === 'claude').path, join('C:/home', '.claude', 'skills'))
   assert.equal(roots.find((root) => root.id === 'zcode').path, join('C:/home', '.zcode', 'skills'))
 })
 

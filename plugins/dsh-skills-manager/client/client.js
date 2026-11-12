@@ -83,12 +83,9 @@ window.__ModuleLoader__.load({
       ".dsm-skillItemMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}",
       ".dsm-skillItemName{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
       ".dsm-skillItemDesc{font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-      // —— 开关 ——
-      ".dsm-switch{position:relative;width:32px;height:18px;flex:none;display:inline-flex;align-items:center;padding:1px;border:0;border-radius:9999px;background:color-mix(in srgb, var(--dsw-alias-label-primary) 30%, transparent);cursor:pointer}",
-      ".dsm-switch[data-on=\"true\"]{background:var(--dsw-alias-label-primary)}",
-      ".dsm-switchKnob{display:block;width:16px;height:16px;border-radius:999px;background:var(--dsw-alias-label-primary);transition:transform .15s ease}",
-      ".dsm-switch[data-on=\"true\"] .dsm-switchKnob{transform:translateX(14px);background:var(--dsw-alias-bg-base)}",
-      ".dsm-switch:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}",
+      // —— 导入按钮 ——
+      ".dsm-importBtn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px 0 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;cursor:pointer}",
+      ".dsm-importBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
       ".dsm-trash{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
       ".dsm-trash:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-2)}",
       ".dsm-groupTitle{padding:10px 4px 6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:600}",
@@ -131,8 +128,6 @@ window.__ModuleLoader__.load({
       ".dsm-md-p a,.dsm-md-list a,.dsm-md-h a,.dsm-md-quote a{color:var(--dsw-alias-brand-primary)}",
       ".dsm-md-hr{border:0;border-top:1px solid var(--dsw-alias-border-l1);margin:10px 0}",
       ".dsm-muted{color:var(--dsw-alias-label-secondary)}",
-      ".dsm-twoCol{display:grid;grid-template-columns:1fr 1fr;gap:16px}",
-      "@media (max-width:520px){.dsm-twoCol{grid-template-columns:1fr}}",
       ".dsm-value{font-size:13.5px;margin-top:4px}",
       ".dsm-pathRow{display:flex;align-items:center;gap:6px;margin-top:2px;min-width:0}",
       ".dsm-path{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
@@ -204,7 +199,6 @@ window.__ModuleLoader__.load({
     const IconCaret = (p) => h(Svg, Object.assign({ width: 14, height: 14 }, p), h("path", { d: "m6 9 6 6 6-6" }));
     const IconChevronRight = (p) => h(Svg, Object.assign({ width: 16, height: 16 }, p), h("path", { d: "m9 6 6 6-6 6" }));
     const IconSearch = (p) => h(Svg, p, h("circle", { cx: 11, cy: 11, r: 7 }), h("path", { d: "m20 20-3.2-3.2" }));
-    const IconMore = (p) => h(Svg, p, h("circle", { cx: 5, cy: 12, r: 1.6, fill: "currentColor" }), h("circle", { cx: 12, cy: 12, r: 1.6, fill: "currentColor" }), h("circle", { cx: 19, cy: 12, r: 1.6, fill: "currentColor" }));
     const IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
     const IconTrash = (p) => h(Svg, p, h("path", { d: "M4 7h16M10 11v6M14 11v6" }), h("path", { d: "M6 7l1 13h10l1-13" }), h("path", { d: "M9 7V4h6v3" }));
     const IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
@@ -513,7 +507,6 @@ window.__ModuleLoader__.load({
         "scope.workspace": "工作区",
         "action.refresh": "刷新",
         "action.import": "导入",
-        "action.more": "更多操作",
         "action.cancel": "取消",
         "action.delete": "删除",
         "action.retry": "重试",
@@ -525,15 +518,11 @@ window.__ModuleLoader__.load({
         "detail.description": "描述",
         "detail.content": "文件内容",
         "detail.scope": "范围",
-        "detail.status": "状态",
-        "detail.enabled": "已启用",
-        "detail.disabled": "已禁用",
         "detail.path": "文件路径",
         "detail.titleSuffix": "详情",
         "list.readonly": "只读",
-        "list.disabledBadge": "已停用",
         "list.blockedBadge": "DSH 不加载",
-        "list.blockedTitle": "DSH 不会加载这个技能：{reason}（修好后开关才有效）",
+        "list.blockedTitle": "DSH 不会加载这个技能：{reason}",
         "issue.missing-name": "frontmatter 缺少 name",
         "issue.missing-description": "frontmatter 缺少 description",
         "issue.legacy-invocation-key": "含 DSH 已废弃的调用键（disableModelInvocation / modelInvocable / userInvocable）",
@@ -579,10 +568,6 @@ window.__ModuleLoader__.load({
         "state.loadFailed": "加载失败：{error}",
         "state.empty": "没有找到任何技能。",
         "state.registryUnavailable": "技能注册表暂不可用，当前仅显示本地扫描结果。",
-        "switch.enable": "启用 {name}",
-        "switch.disable": "停用 {name}",
-        "switch.hint": "停用后：模型不会再把它放进会话技能目录、也无法用 skill 工具加载；用户也不能在对话里点名调用。已经注入当前会话的内容仍留在历史里。",
-        "aria.switch": "开关",
         "aria.dialog": "对话框",
         "root.userDsh": "全局 DSH",
         "root.userAgents": "全局 Agents",
@@ -634,7 +619,6 @@ window.__ModuleLoader__.load({
         "scope.workspace": "Workspace",
         "action.refresh": "Refresh",
         "action.import": "Import",
-        "action.more": "More actions",
         "action.cancel": "Cancel",
         "action.delete": "Delete",
         "action.retry": "Retry",
@@ -646,15 +630,11 @@ window.__ModuleLoader__.load({
         "detail.description": "Description",
         "detail.content": "File content",
         "detail.scope": "Scope",
-        "detail.status": "Status",
-        "detail.enabled": "Enabled",
-        "detail.disabled": "Disabled",
         "detail.path": "File path",
         "detail.titleSuffix": "Details",
         "list.readonly": "Read-only",
-        "list.disabledBadge": "Disabled",
         "list.blockedBadge": "Not loaded by DSH",
-        "list.blockedTitle": "DSH will not load this skill: {reason} (the switch only works once it is fixed)",
+        "list.blockedTitle": "DSH will not load this skill: {reason}",
         "issue.missing-name": "frontmatter has no name",
         "issue.missing-description": "frontmatter has no description",
         "issue.legacy-invocation-key": "carries an invocation key DSH no longer accepts (disableModelInvocation / modelInvocable / userInvocable)",
@@ -700,10 +680,6 @@ window.__ModuleLoader__.load({
         "state.loadFailed": "Failed to load: {error}",
         "state.empty": "No skills found.",
         "state.registryUnavailable": "The skill registry is unavailable; only locally scanned results are shown.",
-        "switch.enable": "Enable {name}",
-        "switch.disable": "Disable {name}",
-        "switch.hint": "When disabled: the model no longer lists it in the session skill catalog and cannot load it with the skill tool; the user cannot invoke it by name either. Content already injected into the current session stays in the history.",
-        "aria.switch": "Switch",
         "aria.dialog": "Dialog",
         "root.userDsh": "Global DSH",
         "root.userAgents": "Global Agents",
@@ -804,21 +780,6 @@ window.__ModuleLoader__.load({
     /* ---------------------------------------------------------------- */
     /* 小组件                                                            */
     /* ---------------------------------------------------------------- */
-
-    function Switch(props) {
-      const on = props.on;
-      return h("button", {
-        type: "button",
-        className: "dsm-switch",
-        role: "switch",
-        "aria-checked": on ? "true" : "false",
-        "aria-label": props.label || tr(currentT, "aria.switch"),
-        title: props.title || undefined,
-        "data-on": on ? "true" : "false",
-        disabled: props.disabled || false,
-        onClick: (event) => { event.stopPropagation(); props.onChange(!on); },
-      }, h("span", { className: "dsm-switchKnob" }));
-    }
 
     function IconButton(props, children) {
       return h("button", {
@@ -952,7 +913,6 @@ window.__ModuleLoader__.load({
       };
 
       const scopeText = scopeTextOf(skill);
-      const statusText = skill.invocation && skill.invocation.modelInvocable === false ? t("detail.disabled") : t("detail.enabled");
       const descriptionText = (detail && detail.frontmatter && typeof detail.frontmatter.description === "string" && detail.frontmatter.description !== "")
         ? detail.frontmatter.description
         : skill.description || "";
@@ -1031,15 +991,9 @@ window.__ModuleLoader__.load({
             ? renderMarkdown(bodyShown)
             : h("span", { className: "dsm-muted" }, detail ? t("detail.noContent") : t("state.loading"))),
           detail && detail.contentTruncated ? h("div", { className: "dsm-footNote" }, t("detail.truncated")) : null,
-          h("div", { className: "dsm-twoCol" },
-            h("div", null,
-              h("div", { className: "dsm-label" }, t("detail.scope")),
-              h("div", { className: "dsm-value" }, scopeText),
-            ),
-            h("div", null,
-              h("div", { className: "dsm-label" }, t("detail.status")),
-              h("div", { className: "dsm-value" }, statusText),
-            ),
+          h("div", null,
+            h("div", { className: "dsm-label" }, t("detail.scope")),
+            h("div", { className: "dsm-value" }, scopeText),
           ),
           h("div", { className: "dsm-label" }, t("detail.path")),
           h("div", { className: "dsm-pathRow" },
@@ -1418,16 +1372,6 @@ window.__ModuleLoader__.load({
 
       const scopeLabel = scope.kind === "project" ? scope.title + " " + t("scope.localSuffix") : t("scope.user");
 
-      const toggleSkill = async (skill, next) => {
-        setNotice(null);
-        try {
-          await apiPost("/toggle", { name: skill.name, disabled: !next, cwd });
-          loadRef.current();
-        } catch (err) {
-          setNotice(localizeError(err));
-        }
-      };
-
       const removeSkill = async (skill) => {
         setNotice(null);
         try {
@@ -1450,7 +1394,6 @@ window.__ModuleLoader__.load({
 
       const renderRow = (skill) => {
         const writable = writableSources.has(skill.source) && skill.exists;
-        const enabled = !skill.invocation || skill.invocation.modelInvocable !== false;
         // DSH 兼容性：缺 description / 含旧式调用键的技能，DSH 会整个文件忽略。
         const issues = Array.isArray(skill.issues) ? skill.issues : [];
         const blocked = issues.length > 0;
@@ -1473,19 +1416,10 @@ window.__ModuleLoader__.load({
             h("div", { className: "dsm-rowMainTitle" },
               h("div", { className: "dsm-name", title: skill.name }, skill.name),
               blocked ? h("span", { className: "dsm-badge dsm-badgeWarn", title: t("list.blockedTitle", { reason: issueText }) }, t("list.blockedBadge")) : null,
-              writable && !enabled ? h("span", { className: "dsm-badge dsm-badgeOff" }, t("list.disabledBadge")) : null,
             ),
             h("div", { className: "dsm-desc", title: skill.description }, skill.description || t("detail.noDescription")),
           ),
-          writable
-            ? h(Switch, {
-              on: enabled,
-              disabled: blocked,
-              label: blocked ? t("list.blockedTitle", { reason: issueText }) : t(enabled ? "switch.disable" : "switch.enable", { name: skill.name }),
-              title: t("switch.hint"),
-              onChange: (next) => toggleSkill(skill, next),
-            })
-            : h("span", { className: "dsm-badge" }, t("list.readonly")),
+          writable ? null : h("span", { className: "dsm-badge" }, t("list.readonly")),
           writable
             ? IconButton({ className: "dsm-trash", label: "删除 " + skill.name, onClick: () => setConfirmRemove(skill) }, h(IconTrash, null))
             : skill.path
@@ -1539,16 +1473,8 @@ window.__ModuleLoader__.load({
         h("div", { className: "dsm-sectionHead" },
           h("div", { className: "dsm-sectionTitle" }, t("section.installed"), h("span", { className: "dsm-sectionCount" }, String(installed.length))),
           h("div", { className: "dsm-actions" },
-            h(Dropdown, {
-              buttonClassName: "dsm-iconBtn",
-              trigger: h(IconMore, null),
-              hideCaret: true,
-              menuRight: false,
-              children: (close) => [
-                h("button", { key: "import", type: "button", className: "dsm-menuItem", role: "menuitem", onClick: () => { close(); setShowImport(true); } },
-                  h(IconImport, null), h("span", null, t("action.import"))),
-              ],
-            }),
+            h("button", { type: "button", className: "dsm-importBtn", onClick: () => setShowImport(true) },
+              h(IconImport, null), h("span", null, t("action.import"))),
             IconButton({ className: "dsm-iconBtn", label: t("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null)),
           ),
         ),
