@@ -1,11 +1,11 @@
-/** 主面板：作用域下拉 + 搜索 + 技能列表 + 详情/删除弹窗，以及装配入口。 */
+/** 主面板：作用域下拉 + 搜索 + 技能列表 + 详情弹窗，以及装配入口。 */
 
 import { h, getReact } from "./runtime.js";
 import { apiGet, apiPost } from "./api.js";
 import { t, tr, setT, fallbackT, filterSkills, rootTitleOf, localizeError, LOCALE_NS, LOCALE_DICT } from "./i18n.js";
 import { ensureStyles } from "./styles.js";
-import { IconMonitor, IconFolder, IconSearch, IconClose, IconRefresh, IconTrash, IconSparkle, IconLayers, IconCheck, IconCaret } from "./icons.js";
-import { Modal, Dropdown, IconButton } from "./components.js";
+import { IconMonitor, IconFolder, IconSearch, IconClose, IconRefresh, IconSparkle, IconLayers, IconCheck, IconCaret } from "./icons.js";
+import { Dropdown, IconButton } from "./components.js";
 import { DetailModal } from "./detail.js";
 import { parseInline, parseMarkdown, mergeChunks, translationChunks, localeDict } from "./pure.js";
 
@@ -50,7 +50,6 @@ function Panel(props) {
   const [scope, setScope] = useState({ kind: "global", path: "", title: "" });
   const [detail, setDetail] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [confirmRemove, setConfirmRemove] = useState(null);
   // 请求序号：作用域快速切换时，过期响应不得覆盖新数据。
   const requestSeq = useRef(0);
 
@@ -80,11 +79,6 @@ function Panel(props) {
       });
   }, [cwd]);
 
-  // 写操作完成后的刷新必须走「最新」的加载器，不能用点击那一刻闭包里的旧 load()：
-  // 否则作用域切换后，旧闭包会把面板钉回旧作用域，用户按新作用域理解去删技能就可能误删。
-  const loadRef = useRef(load);
-  useEffect(() => { loadRef.current = load; }, [load]);
-
   useEffect(() => { load(); }, [load]);
 
   const skills = (state && state.skills) || [];
@@ -97,7 +91,7 @@ function Panel(props) {
     return map;
   }, [roots]);
   // 可写根由宿主给出（root.kind），客户端不再另写一份白名单——
-  // 否则用户自定义目录里的技能会被误判成只读，开关与删除全消失。
+  // 否则用户自定义目录里的技能会被误判成只读，行内操作全消失。
   const writableSources = useMemo(() => {
     const set = new Set();
     for (const root of roots) {
@@ -128,17 +122,6 @@ function Panel(props) {
   }, [builtin]);
 
   const scopeLabel = scope.kind === "project" ? scope.title + " " + tt("scope.localSuffix") : tt("scope.user");
-
-  const removeSkill = async (skill) => {
-    setNotice(null);
-    try {
-      await apiPost("/remove", { name: skill.name, cwd });
-      setConfirmRemove(null);
-      loadRef.current();
-    } catch (err) {
-      setNotice(localizeError(err));
-    }
-  };
 
   const openDirectory = async (skill) => {
     setNotice(null);
@@ -177,11 +160,9 @@ function Panel(props) {
         h("div", { className: "dsm-desc", title: skill.description }, skill.description || tt("detail.noDescription")),
       ),
       writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly")),
-      writable
-        ? IconButton({ className: "dsm-trash", label: "删除 " + skill.name, onClick: () => setConfirmRemove(skill) }, h(IconTrash, null))
-        : skill.path
-          ? IconButton({ className: "dsm-trash", label: "打开目录 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null))
-          : null,
+      skill.path
+        ? IconButton({ className: "dsm-iconBtnSm", label: "打开目录 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null))
+        : null,
     );
   };
 
@@ -277,27 +258,6 @@ function Panel(props) {
       : null,
 
     detail ? h(DetailModal, { t: tt, skill: detail, cwd, onClose: () => setDetail(null) }) : null,
-    confirmRemove
-      ? h(Modal, { onClose: () => setConfirmRemove(null), label: tt("delete.title") },
-        h("div", { className: "dsm-modalHead" },
-          h("span", { className: "dsm-modalTitle" }, "删除技能"),
-          h("div", { style: { marginLeft: "auto" } },
-            IconButton({ className: "dsm-iconBtnSm", label: "关闭", onClick: () => setConfirmRemove(null) }, h(IconClose, null))),
-        ),
-        h("div", { className: "dsm-modalBody" },
-          h("div", null, tt("delete.question", { name: confirmRemove.name })),
-          h("div", { className: "dsm-pathRow", style: { marginTop: "8px" } },
-            h("code", { className: "dsm-path", title: confirmRemove.path || "" }, confirmRemove.path || ""),
-          ),
-          h("div", { className: "dsm-footNote" }, tt("delete.note")),
-          h("div", { style: { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "4px" } },
-            h("button", { type: "button", className: "dsm-btnText", onClick: () => setConfirmRemove(null) }, tt("action.cancel")),
-            h("button", { type: "button", className: "dsm-primary", onClick: () => removeSkill(confirmRemove) },
-              h(IconTrash, null), h("span", null, tt("action.delete"))),
-          ),
-        ),
-      )
-      : null,
   );
 }
 

@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { globalRootsFor, isManagedRoot, normalizeCwd, projectRootOf, projectRootsFor, realWithinRoot, rootKindOf, withinRoot } from '../lib/roots.js'
+import { globalRootsFor, normalizeCwd, projectRootOf, projectRootsFor, realWithinRoot, rootKindOf, withinRoot } from '../lib/roots.js'
 import { collectSkillFiles, discoverLocalSkills } from '../lib/scan.js'
 
 function tempDir() {
@@ -52,12 +52,12 @@ test('globalRootsFor 支持自定义根与内置根', () => {
   assert.equal(roots[3].rank, 600)
 })
 
-test('rootKindOf 与 isManagedRoot 覆盖来源分类', () => {
+test('rootKindOf 覆盖来源分类', () => {
   assert.equal(rootKindOf('user-dsh'), 'global')
   assert.equal(rootKindOf('project-agents'), 'project')
-  assert.equal(isManagedRoot('user-agents'), true)
-  assert.equal(isManagedRoot('bundled'), false)
-  assert.equal(isManagedRoot('runtime'), false)
+  assert.equal(rootKindOf('bundled'), 'bundled')
+  assert.equal(rootKindOf('runtime'), 'runtime')
+  assert.equal(rootKindOf('custom'), 'custom')
 })
 
 test('discoverLocalSkills 只发现一层目录 bundle 与平铺 md', () => {
@@ -108,7 +108,7 @@ test('collectSkillFiles 平铺文件不会被当成目录 bundle', () => {
     mkdirSync(root, { recursive: true })
     const file = join(root, 'skill.md')
     writeFileSync(file, 'x', 'utf8')
-    // 即使文件名是 skill.md，只要不是目录 bundle，就不能去遍历目录、更不能删目录。
+    // 即使文件名是 skill.md，只要不是目录 bundle，就只能按平铺文件处理，不能去遍历目录。
     const info = collectSkillFiles(file, false)
     assert.equal(info.isBundle, false)
     assert.equal(info.files.length, 1)
@@ -130,7 +130,7 @@ test('discoverLocalSkills 平铺 skill.md 不被当成目录 bundle', () => {
     const flat = found.find((skill) => skill.name === 'root-skill')
     assert.equal(flat.isBundle, false)
     assert.equal(flat.isFlat, true)
-    // 关键：平铺技能不能被当成目录 bundle——否则删除它会连整个根目录一起删掉。
+    // 关键：平铺技能不能被当成目录 bundle——否则它的目录会被算成上一级（整个根）。
     assert.equal(found.length, 2)
   } finally {
     rmSync(base, { recursive: true, force: true })

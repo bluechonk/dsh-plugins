@@ -28,8 +28,6 @@
       "scope.builtin": "\u5185\u7F6E",
       "scope.workspace": "\u5DE5\u4F5C\u533A",
       "action.refresh": "\u5237\u65B0",
-      "action.cancel": "\u53D6\u6D88",
-      "action.delete": "\u5220\u9664",
       "action.retry": "\u91CD\u8BD5",
       "action.close": "\u5173\u95ED",
       "action.copyPath": "\u590D\u5236\u8DEF\u5F84",
@@ -57,9 +55,6 @@
       "detail.translatedText": "\u8BD1\u6587",
       "detail.translating": "\u7FFB\u8BD1\u4E2D\u2026",
       "detail.retranslate": "\u91CD\u65B0\u7FFB\u8BD1",
-      "delete.title": "\u5220\u9664\u6280\u80FD",
-      "delete.question": "\u786E\u5B9A\u5220\u9664\u6280\u80FD\u300C{name}\u300D\uFF1F",
-      "delete.note": "\u6280\u80FD\u76EE\u5F55\u4E0B\u7684\u5168\u90E8\u6587\u4EF6\u90FD\u4F1A\u88AB\u79FB\u9664\uFF0C\u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\u3002",
       "state.loading": "\u52A0\u8F7D\u4E2D\u2026",
       "state.loadFailed": "\u52A0\u8F7D\u5931\u8D25\uFF1A{error}",
       "state.empty": "\u6CA1\u6709\u627E\u5230\u4EFB\u4F55\u6280\u80FD\u3002",
@@ -78,11 +73,8 @@
       "error.bad-json": "\u8BF7\u6C42\u4F53\u4E0D\u662F\u5408\u6CD5 JSON",
       "error.body-too-large": "\u8BF7\u6C42\u4F53\u8D85\u8FC7 1MB \u4E0A\u9650",
       "error.skill-not-found": "\u627E\u4E0D\u5230\u6280\u80FD\uFF1A{name}",
-      "error.skill-not-writable": "\u8BE5\u6280\u80FD\u6CA1\u6709\u53EF\u6539\u5199\u7684 SKILL.md",
-      "error.skill-readonly": "\u5185\u7F6E\u6216\u8FD0\u884C\u65F6\u6280\u80FD\u4E0D\u53EF\u6539\u5199",
       "error.not-utf8": "SKILL.md \u4E0D\u662F UTF-8 \u7F16\u7801\uFF0C\u5DF2\u62D2\u7EDD\u6539\u5199\u4EE5\u514D\u635F\u574F\u5185\u5BB9",
       "error.outside-root": "\u62D2\u7EDD\u64CD\u4F5C\u6280\u80FD\u6839\u4E4B\u5916\u7684\u8DEF\u5F84",
-      "error.delete-root-refused": "\u62D2\u7EDD\u5220\u9664\u6280\u80FD\u6839\u76EE\u5F55\u672C\u8EAB",
       "error.invalid-name": "\u6280\u80FD\u540D\u5FC5\u987B\u662F kebab-case\uFF08\u4EC5\u5C0F\u5199\u5B57\u6BCD\u3001\u6570\u5B57\u4E0E\u8FDE\u5B57\u7B26\uFF09",
       "error.empty-description": "\u63CF\u8FF0\u4E0D\u80FD\u4E3A\u7A7A",
       "error.description-too-long": "\u63CF\u8FF0\u8FC7\u957F\uFF08\u4E0A\u9650 500 \u5B57\uFF09",
@@ -113,8 +105,6 @@
       "scope.builtin": "Built-in",
       "scope.workspace": "Workspace",
       "action.refresh": "Refresh",
-      "action.cancel": "Cancel",
-      "action.delete": "Delete",
       "action.retry": "Retry",
       "action.close": "Close",
       "action.copyPath": "Copy path",
@@ -142,9 +132,6 @@
       "detail.translatedText": "Translated",
       "detail.translating": "Translating\u2026",
       "detail.retranslate": "Retranslate",
-      "delete.title": "Delete Skill",
-      "delete.question": "Delete skill \u201C{name}\u201D?",
-      "delete.note": "All files in the skill folder will be removed. This cannot be undone.",
       "state.loading": "Loading\u2026",
       "state.loadFailed": "Failed to load: {error}",
       "state.empty": "No skills found.",
@@ -163,11 +150,8 @@
       "error.bad-json": "The request body is not valid JSON",
       "error.body-too-large": "The request body exceeds the 1MB limit",
       "error.skill-not-found": "Skill not found: {name}",
-      "error.skill-not-writable": "This skill has no writable SKILL.md",
-      "error.skill-readonly": "Built-in or runtime skills cannot be modified",
       "error.not-utf8": "SKILL.md is not UTF-8 encoded; refusing to modify it to avoid corrupting the content",
       "error.outside-root": "Refusing to operate on paths outside the skill root",
-      "error.delete-root-refused": "Refusing to delete the skill root itself",
       "error.invalid-name": "Skill name must be kebab-case (lowercase letters, digits and hyphens only)",
       "error.empty-description": "Description is required",
       "error.description-too-long": "Description is too long (max 500 characters)",
@@ -334,8 +318,6 @@
     ".dsm-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap}",
     ".dsm-badgeWarn{color:var(--dsw-alias-state-warning,var(--dsw-alias-label-secondary));border-color:color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 45%, transparent)}",
     ".dsm-rowMainTitle{display:flex;align-items:center;gap:8px;min-width:0}",
-    ".dsm-trash{width:28px;height:28px;flex:none;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
-    ".dsm-trash:hover{color:var(--dsw-alias-state-error-primary);background:var(--dsw-alias-bg-layer-2)}",
     ".dsm-groupTitle{padding:10px 4px 6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:600}",
     // —— 下拉菜单 ——
     ".dsm-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:230px;padding:6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:2px}",
@@ -422,7 +404,6 @@
   var IconCaret = (p) => h(Svg, Object.assign({ width: 14, height: 14 }, p), h("path", { d: "m6 9 6 6 6-6" }));
   var IconSearch = (p) => h(Svg, p, h("circle", { cx: 11, cy: 11, r: 7 }), h("path", { d: "m20 20-3.2-3.2" }));
   var IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
-  var IconTrash = (p) => h(Svg, p, h("path", { d: "M4 7h16M10 11v6M14 11v6" }), h("path", { d: "M6 7l1 13h10l1-13" }), h("path", { d: "M9 7V4h6v3" }));
   var IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
   var IconWarning = (p) => h(Svg, p, h("path", { d: "M12 3 2.5 19.5h19L12 3Z" }), h("path", { d: "M12 10v4" }), h("path", { d: "M12 17.5h.01" }));
   var IconCheck = (p) => h(Svg, p, h("path", { d: "m5 13 4 4 10-10" }));
@@ -910,7 +891,6 @@
     const [scope, setScope] = useState({ kind: "global", path: "", title: "" });
     const [detail, setDetail] = useState(null);
     const [notice, setNotice] = useState(null);
-    const [confirmRemove, setConfirmRemove] = useState(null);
     const requestSeq = useRef(0);
     const cwd = scope.kind === "project" ? scope.path : "";
     const load = useCallback((useRefresh) => {
@@ -932,10 +912,6 @@
         setLoading(false);
       });
     }, [cwd]);
-    const loadRef = useRef(load);
-    useEffect(() => {
-      loadRef.current = load;
-    }, [load]);
     useEffect(() => {
       load();
     }, [load]);
@@ -973,16 +949,6 @@
       return [...groups.entries()];
     }, [builtin]);
     const scopeLabel = scope.kind === "project" ? scope.title + " " + tt("scope.localSuffix") : tt("scope.user");
-    const removeSkill = async (skill) => {
-      setNotice(null);
-      try {
-        await apiPost("/remove", { name: skill.name, cwd });
-        setConfirmRemove(null);
-        loadRef.current();
-      } catch (err) {
-        setNotice(localizeError(err));
-      }
-    };
     const openDirectory = async (skill) => {
       setNotice(null);
       try {
@@ -1024,7 +990,7 @@
           h("div", { className: "dsm-desc", title: skill.description }, skill.description || tt("detail.noDescription"))
         ),
         writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly")),
-        writable ? IconButton({ className: "dsm-trash", label: "\u5220\u9664 " + skill.name, onClick: () => setConfirmRemove(skill) }, h(IconTrash, null)) : skill.path ? IconButton({ className: "dsm-trash", label: "\u6253\u5F00\u76EE\u5F55 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null)) : null
+        skill.path ? IconButton({ className: "dsm-iconBtnSm", label: "\u6253\u5F00\u76EE\u5F55 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null)) : null
       );
     };
     return h(
@@ -1130,43 +1096,7 @@
           h("div", { className: "dsm-list" }, group.map(renderRow))
         ))
       ) : null,
-      detail ? h(DetailModal, { t: tt, skill: detail, cwd, onClose: () => setDetail(null) }) : null,
-      confirmRemove ? h(
-        Modal,
-        { onClose: () => setConfirmRemove(null), label: tt("delete.title") },
-        h(
-          "div",
-          { className: "dsm-modalHead" },
-          h("span", { className: "dsm-modalTitle" }, "\u5220\u9664\u6280\u80FD"),
-          h(
-            "div",
-            { style: { marginLeft: "auto" } },
-            IconButton({ className: "dsm-iconBtnSm", label: "\u5173\u95ED", onClick: () => setConfirmRemove(null) }, h(IconClose, null))
-          )
-        ),
-        h(
-          "div",
-          { className: "dsm-modalBody" },
-          h("div", null, tt("delete.question", { name: confirmRemove.name })),
-          h(
-            "div",
-            { className: "dsm-pathRow", style: { marginTop: "8px" } },
-            h("code", { className: "dsm-path", title: confirmRemove.path || "" }, confirmRemove.path || "")
-          ),
-          h("div", { className: "dsm-footNote" }, tt("delete.note")),
-          h(
-            "div",
-            { style: { display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "4px" } },
-            h("button", { type: "button", className: "dsm-btnText", onClick: () => setConfirmRemove(null) }, tt("action.cancel")),
-            h(
-              "button",
-              { type: "button", className: "dsm-primary", onClick: () => removeSkill(confirmRemove) },
-              h(IconTrash, null),
-              h("span", null, tt("action.delete"))
-            )
-          )
-        )
-      ) : null
+      detail ? h(DetailModal, { t: tt, skill: detail, cwd, onClose: () => setDetail(null) }) : null
     );
   }
   function apply(ctx) {
