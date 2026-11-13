@@ -4,7 +4,7 @@
 #       改它会丢用户配置，勿动；卸载时用这个 id 在插件管理器里定位。
 # name: npm 包名（scope 版），宿主按此名在 profile 的 node_modules 里解析插件包。
 #
-# host 半(lib/index.js)：挂同源 HTTP 路由，扫描技能根目录并提供列表/详情/启停/导入/删除。
+# host 半(lib/index.js)：挂同源 HTTP 路由，扫描技能根目录并提供列表/详情/翻译/打开目录。
 # client 半(client/client.js)：注册侧边栏导航行「技能」(sidebar.panellist order 30)
 #   与对应主面板（main keyed，key=skills-manager），位置与「插件」「自动化任务」「使用统计」同级。
 #

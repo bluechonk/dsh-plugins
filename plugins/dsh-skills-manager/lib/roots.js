@@ -91,11 +91,6 @@ export function rootKindOf(label) {
   return 'custom'
 }
 
-/** 该根下的技能是否允许写操作（启停/删除）。 */
-export function isManagedRoot(label) {
-  return label === 'user-dsh' || label === 'user-agents' || label === 'project-dsh' || label === 'project-agents' || label === 'custom'
-}
-
 /**
  * 字符串层面的包含判断：目标是否在根目录之下。
  * Windows 上路径大小写不敏感，比较时统一小写；真实边界以 realWithinRoot 为准。

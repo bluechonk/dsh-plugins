@@ -5,7 +5,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -230,11 +230,11 @@ test('跨站来源与非常规来源地址都被拒', async () => {
 test('非法 JSON 与 null 载荷返回 400（不是 500）', async () => {
   const host = makeHost()
   try {
-    const broken = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: '{not json' })
+    const broken = await call(host, '/dsh-skills-manager/body', { method: 'POST', body: '{not json' })
     assert.equal(broken.statusCode, 400)
-    const nullBody = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: 'null' })
+    const nullBody = await call(host, '/dsh-skills-manager/body', { method: 'POST', body: 'null' })
     assert.equal(nullBody.statusCode, 400)
-    const arrayBody = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: '[]' })
+    const arrayBody = await call(host, '/dsh-skills-manager/body', { method: 'POST', body: '[]' })
     assert.equal(arrayBody.statusCode, 400)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
@@ -245,52 +245,42 @@ test('超大请求体返回 413', async () => {
   const host = makeHost()
   try {
     const big = 'x'.repeat(1024 * 1024 + 1024)
-    const response = await call(host, '/dsh-skills-manager/remove', { method: 'POST', body: JSON.stringify({ name: 'demo', description: big }) })
+    const response = await call(host, '/dsh-skills-manager/body', { method: 'POST', body: JSON.stringify({ name: 'demo', description: big }) })
     assert.equal(response.statusCode, 413)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
 })
 
-test('写操作后状态立刻反映（写操作要清掉扫描缓存）', async () => {
+test('refresh=1 绕过扫描缓存，立即看到磁盘上的新增技能', async () => {
   const host = makeHost()
   try {
-    const dir = join(host.skillsRoot, 'fresh-skill')
+    const dir = join(host.skillsRoot, 'cached-skill')
     mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, 'SKILL.md'), '---\nname: fresh-skill\ndescription: 新写的技能\n---\n', 'utf8')
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: cached-skill\ndescription: 先建的技能\n---\n', 'utf8')
     // 先读一次，把扫描缓存热起来
     const first = (await call(host, '/dsh-skills-manager/state')).json()
-    assert.ok(first.skills.some((skill) => skill.name === 'fresh-skill'))
+    assert.ok(first.skills.some((skill) => skill.name === 'cached-skill'))
 
-    const removed = await call(host, '/dsh-skills-manager/remove', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'fresh-skill' }),
-    })
-    assert.equal(removed.statusCode, 200)
-    // 不等 TTL：紧接着读状态就要看到删除结果
-    const second = (await call(host, '/dsh-skills-manager/state')).json()
-    assert.equal(second.skills.some((skill) => skill.name === 'fresh-skill'), false)
+    // TTL 内再读仍走缓存：后落的技能看不到
+    const late = join(host.skillsRoot, 'late-skill')
+    mkdirSync(late, { recursive: true })
+    writeFileSync(join(late, 'SKILL.md'), '---\nname: late-skill\ndescription: 后建的技能\n---\n', 'utf8')
+    const cached = (await call(host, '/dsh-skills-manager/state')).json()
+    assert.equal(cached.skills.some((skill) => skill.name === 'late-skill'), false)
+
+    // refresh=1 强制重扫，立即看到新技能
+    const refreshed = (await call(host, '/dsh-skills-manager/state', { url: '/dsh-skills-manager/state?refresh=1' })).json()
+    assert.ok(refreshed.skills.some((skill) => skill.name === 'late-skill'))
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
 })
 
-test('删除根目录下平铺的 skill.md 不会抹掉整个根', async () => {
+test('删除路由已下线（不再注册 /remove）', async () => {
   const host = makeHost()
   try {
-    writeFileSync(join(host.skillsRoot, 'skill.md'), '---\nname: root-skill\ndescription: 平铺\n---\n', 'utf8')
-    mkdirSync(join(host.skillsRoot, 'other-skill'), { recursive: true })
-    writeFileSync(join(host.skillsRoot, 'other-skill', 'SKILL.md'), '---\nname: other-skill\ndescription: 目录技能\n---\n', 'utf8')
-
-    const removed = await call(host, '/dsh-skills-manager/remove', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'root-skill' }),
-    })
-    assert.equal(removed.statusCode, 200)
-    // 根目录与其它技能必须还在
-    assert.ok(readFileSync(join(host.skillsRoot, 'other-skill', 'SKILL.md'), 'utf8').includes('other-skill'))
-    const state = await call(host, '/dsh-skills-manager/state')
-    assert.ok(state.json().skills.some((skill) => skill.name === 'other-skill'))
+    assert.equal(host.routes.has('/dsh-skills-manager/remove'), false)
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
@@ -299,7 +289,7 @@ test('删除根目录下平铺的 skill.md 不会抹掉整个根', async () => {
 test('未登记的技能返回 404', async () => {
   const host = makeHost()
   try {
-    const missing = await call(host, '/dsh-skills-manager/remove', {
+    const missing = await call(host, '/dsh-skills-manager/reveal', {
       method: 'POST',
       body: JSON.stringify({ name: 'not-exist' }),
     })

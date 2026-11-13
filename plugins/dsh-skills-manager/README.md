@@ -32,7 +32,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 | 作用域下拉 | 「用户 · 本机」只显示全局 `~/.dsh/skills`、用户级 `~/.agents/skills` 与预设内置技能；「工作区」分组列出各工作区，**选中某个工作区就只显示该工作区的** `<工作路径>/.dsh/skills` 与 `<工作路径>/.agents/skills`（不混入全局/用户级）。切换工作区只重扫该工作区 |
 | 技能计数 | 顶部「技能 N」为当前作用域可见的技能总数 |
 | 搜索 | 按名称、描述、路径实时过滤 |
-| 已安装列表 | 名称 + 描述 + 删除按钮；删除只允许落在受管根之下 |
+| 已安装列表 | 名称 + 描述 + 打开目录按钮（有本地文件的技能） |
 | 兼容性提示 | DSH 要求 frontmatter 同时有 `name` 与 `description`，且不含旧式调用键——不满足的技能标「DSH 不加载」（这类文件会被宿主整个忽略） |
 | 内置分组 | 运行时注册与随包内置的技能只读展示，按来源分组；**内置技能的正文从宿主注册表读取**（打包在 `app.asar` 里的技能没有本地文件） |
 | 搜索 | 随输入实时过滤（名称 / 描述 / 路径 / 来源），不用回车；有内容时右侧出现清除按钮 |
@@ -129,20 +129,18 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-skills-manager"
 
 ## 数据通道
 
-宿主半在 `ctx.webServer` 上注册同源路由（全部带回环 + 同源守卫，写操作另有方法与体积限制）：
+宿主半在 `ctx.webServer` 上注册同源路由（全部带回环 + 同源守卫，POST 路由另有方法与体积限制）：
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | GET | `/dsh-skills-manager/state` | 技能列表、根清单、工作区列表、统计 |
 | POST | `/dsh-skills-manager/body` | 单个技能的 frontmatter、正文、文件清单 |
 | POST | `/dsh-skills-manager/reveal` | 在系统文件管理器中打开技能目录 |
-| POST | `/dsh-skills-manager/remove` | 删除受管根下的技能 |
 
 ## 安全与边界
 
-- 写操作的目标一律由宿主按「已扫描到的技能」反查得到，**不接受客户端传入的任意绝对路径**；项目落点只认已登记工作区。
-- 删除仅限受管根（`user-dsh` / `user-agents` / `project-dsh` / `project-agents`）；软链只删链接不删源；删除前校验目标不等于受管根本身；界面上有二次确认并列出路径。
-- 官方包内置技能（`node_modules` 内，按真实路径判定）拒绝改写与删除，避免破坏官方包。
+- 路由目标一律由宿主按「已扫描到的技能」反查得到，**不接受客户端传入的任意绝对路径**；项目落点只认已登记工作区。
+- 内置与运行时技能只读展示（列表标「只读」）；插件不提供任何改写或删除技能文件的入口。
 - 插件不写任何持久化数据，仅在 profile 目录留一份 `skills-manager.log` 审计日志；不联网、不上传。
 
 ## 目录结构
@@ -175,7 +173,7 @@ plugins/dsh-skills-manager/
 ```bash
 npm install           # 在仓库根目录，装 esbuild（仅构建需要）
 npm run build         # 在仓库根目录，把 src/client/ 打包成 client/client.js
-npm test              # node:test 单测（57 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 翻译缓存 / 客户端纯函数 / i18n）
+npm test              # node:test 单测（59 项：frontmatter / 根解析 / 目录扫描 / HTTP 层 / 翻译缓存 / 客户端纯函数 / i18n）
 npm run check         # 语法检查（lib / client / src）
 ```
 

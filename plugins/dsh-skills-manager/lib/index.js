@@ -3,15 +3,14 @@
 // 职责：
 //  - 扫描技能根目录（全局 ~/.dsh/skills、~/.agents/skills、项目 <root>/.dsh|.agents/skills、
 //    预设内置目录），与 ctx.skills.list() 的注册表结果合并，得到「当前实际加载」的技能全景；
-//  - 通过同源 HTTP 路由把列表、详情、启停、导入、删除能力交给设置页的「技能」面板。
+//  - 通过同源 HTTP 路由把列表、详情、正文、翻译、打开目录能力交给「技能」面板。
 //
-// 路径安全：所有写操作的目标都由宿主按「已扫描到的技能」反查得到，绝不接受客户端传入的
-// 任意绝对路径；删除只允许落在受管根之下，软链只删链接不删源。
+// 路径安全：路由目标一律由宿主按「已扫描到的技能」反查得到，绝不接受客户端传入的任意绝对路径。
 //
 // 派生自 pengxiaozi/dsh-plugins 的 dsh-skill-panel（MIT），此处在其只读能力之上补齐
-// 范围切换与写操作，并重写为独立实现。
+// 范围切换，并重写为独立实现。
 
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 
 import {
@@ -28,11 +27,9 @@ import { collectSkillFiles, discoverLocalSkills, readTextHead } from './scan.js'
 import { parseFrontmatter } from './frontmatter.js'
 import {
   globalRootsFor,
-  isManagedRoot,
   normalizeCwd,
   projectRootOf,
   projectRootsFor,
-  realPathOf,
   realWithinRoot,
   ROOT_LABELS,
   rootKindOf,
@@ -520,14 +517,6 @@ export function apply(ctx, config = {}) {
     return hit ? hit.path : ''
   }
 
-  /** 依赖包目录内的技能（预设内置）不可写——改坏会连累官方包。 */
-  const insideNodeModules = (target) => {
-    if (typeof target !== 'string') return false
-    // 用真实路径判定：用户自建的同名目录不算官方包，经符号链接进入官方包才算。
-    const real = realPathOf(target) || resolve(target)
-    return real.split(/[\\/]+/).includes('node_modules')
-  }
-
   /* ------------------------------ 路由 ------------------------------ */
 
   const stateRoute = async (request, response, params) => {
@@ -674,51 +663,6 @@ export function apply(ctx, config = {}) {
     sendJson(response, 200, { ok: true, opened: dir })
   }
 
-  /** 删除：只允许受管根下的技能；软链只删链接。 */
-  const removeRoute = async (request, response) => {
-    const payload = await readJsonBody(request)
-    const name = typeof payload.name === 'string' ? payload.name : ''
-    const { skills } = await listSkills(resolveCwd(payload.cwd))
-    const skill = findSkill(skills, name)
-    if (!skill) return sendError(response, 404, '找不到技能：' + name, undefined, 'skill-not-found', { name })
-    if (!skill.path || !existsSync(skill.path)) return sendError(response, 400, '该技能没有可删除的本地文件', undefined, 'skill-not-writable')
-    if (!isManagedRoot(skill.source)) return sendError(response, 400, '内置或运行时技能不可删除', undefined, 'skill-readonly')
-    if (insideNodeModules(skill.path)) return sendError(response, 400, '官方包内置技能不可删除', undefined, 'skill-readonly')
-    if (!skill.rootPath || !withinRoot(skill.path, skill.rootPath) || !realWithinRoot(skill.path, skill.rootPath)) {
-      return sendError(response, 403, '拒绝删除技能根之外的路径', undefined, 'outside-root')
-    }
-    const target = resolve(skill.path)
-    try {
-      const st = lstatSync(target)
-      if (st.isSymbolicLink()) {
-        unlinkSync(target)
-      } else if (skill.isBundle) {
-        const dir = dirname(target)
-        // 技能目录本身是符号链接时只删链接，绝不递归删除链接指向的真实目录。
-        const dirStat = lstatSync(dir)
-        if (dirStat.isSymbolicLink()) {
-          unlinkSync(dir)
-        } else {
-          // 硬防线：技能目录绝不能等于受管根本身，否则一次删除会抹掉整个根目录。
-          if (samePath(dir, skill.rootPath)) {
-            return sendError(response, 400, '拒绝删除技能根目录本身', undefined, 'delete-root-refused')
-          }
-          // 先改名再删：缩小「校验通过 → 实际删除」之间的时序窗口。
-          const trash = dir + '.dsm-trash-' + Date.now()
-          renameSync(dir, trash)
-          rmSync(trash, { recursive: true, force: true })
-        }
-      } else {
-        rmSync(target, { force: true })
-      }
-    } catch (error) {
-      return sendError(response, 500, '删除失败：' + String(error && error.message ? error.message : error))
-    }
-    invalidateSkillsCache()
-    log('removed ' + name + ' (' + target + ')')
-    sendJson(response, 200, { ok: true, removed: name })
-  }
-
   /* --------------------------- 挂载路由 --------------------------- */
 
   ctx.inject(['webServer', 'loader'], (host) => {
@@ -763,7 +707,6 @@ export function apply(ctx, config = {}) {
     post(`${API_BASE}/body`, bodyRoute)
     post(`${API_BASE}/translate`, translateRoute)
     post(`${API_BASE}/reveal`, revealRoute)
-    post(`${API_BASE}/remove`, removeRoute)
 
     log('routes mounted')
     ctx.effect(() => () => {

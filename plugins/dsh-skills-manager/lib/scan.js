@@ -84,7 +84,7 @@ function walk(baseDir, relDir, collected, limits) {
  * 收集一个技能在磁盘上占用的文件。
  *
  * isBundle 必须由调用方按「该项是不是目录」给出：靠文件名猜会把根目录下平铺的
- * skill.md 当成目录 bundle，删除时连整个技能根一起删掉。
+ * skill.md 当成目录 bundle，从而把整个技能根当成它的目录。
  * @param {string} skillPath SKILL.md 或平铺 .md 的绝对路径
  * @param {boolean} isBundle 该项是否为目录 bundle
  */
@@ -179,7 +179,7 @@ export function discoverLocalSkills(roots) {
         source: root.label,
         rank: root.rank,
         path: mdPath,
-        // bundle 的目录是技能自己的目录；平铺 .md 没有独立目录（dir 留给宿主在删除时判定）。
+        // bundle 的目录是技能自己的目录；平铺 .md 没有独立目录，打开时直接定位到文件本身。
         dir: isBundle ? abs : dirname(mdPath),
         isFlat: !isBundle,
         root: root.label,

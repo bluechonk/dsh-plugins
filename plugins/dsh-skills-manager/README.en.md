@@ -32,7 +32,7 @@ Package name, loader row id and client module id all use the `@bluechonk` scope;
 | Scope dropdown | "User · Local" shows **only** the global `~/.dsh/skills`, the user-level `~/.agents/skills` and the preset built-ins; a "Workspaces" group lists every workspace, and picking one shows **only that workspace's** `<workspace>/.dsh/skills` and `<workspace>/.agents/skills` (global and user-level skills are not mixed in). Switching workspaces only rescans that workspace |
 | Skill count | "Skills N" at the top is the number of skills visible in the current scope |
 | Search | Filters live as you type (name / description / path / source) — no Enter needed; a clear button appears once there is text |
-| Installed list | Name + description + delete button; deletion is limited to managed roots |
+| Installed list | Name + description + open-folder button (for skills with local files) |
 | Compatibility hint | DSH requires both `name` and `description` in the frontmatter and rejects legacy invocation keys — skills that break those rules are flagged "Not loaded by DSH" (the host ignores such files entirely) |
 | Built-in group | Skills registered at runtime or shipped inside a package are shown read-only, grouped by source; **the body of a built-in skill is read from the host registry** (packaged skills such as the Office ones have no local file) |
 | Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in) and the file path (inline monospace path + copy icon) |
@@ -127,22 +127,20 @@ Then restart DSH: "Skills" shows up in the sidebar below "Plugins", "Automations
 
 ## API surface
 
-The host half registers same-origin routes on `ctx.webServer` (all guarded by loopback + same-origin checks; write operations add method and body-size limits):
+The host half registers same-origin routes on `ctx.webServer` (all guarded by loopback + same-origin checks; POST routes add method and body-size limits):
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/dsh-skills-manager/state` | Skill list, root inventory, workspace list, totals |
 | POST | `/dsh-skills-manager/body` | One skill's frontmatter, body and file list |
 | POST | `/dsh-skills-manager/reveal` | Open the skill folder in the system file manager |
-| POST | `/dsh-skills-manager/remove` | Delete a skill under a managed root |
 
 Error responses carry a stable `code` (plus `params` for dynamic parts such as the skill name) so the client can render the message in the host's active language.
 
 ## Safety and boundaries
 
-- Write targets are always resolved by the host from the skills it scanned, so **no arbitrary absolute path from the client is accepted**; a project target must come from a registered workspace.
-- Deletion is limited to managed roots (`user-dsh` / `user-agents` / `project-dsh` / `project-agents`); a symlink is only unlinked, never its target; the target is checked against the managed root itself; the UI asks for confirmation and shows the path.
-- Skills shipped inside official packages (under `node_modules`, detected through the real path) refuse modification and deletion so official packages are never damaged.
+- Route targets are always resolved by the host from the skills it scanned, so **no arbitrary absolute path from the client is accepted**; a project target must come from a registered workspace.
+- Built-in and runtime skills are shown read-only (flagged "Read-only"); the plugin offers no way to modify or delete skill files.
 - The plugin writes no persistent data of its own, only a `skills-manager.log` audit trail in the profile directory; it never reaches the network.
 
 ## Layout
@@ -175,7 +173,7 @@ plugins/dsh-skills-manager/
 ```bash
 npm install           # at the repository root, installs esbuild (build only)
 npm run build         # at the repository root, bundles src/client/ into client/client.js
-npm test              # node:test unit tests (57 cases: frontmatter / roots / discovery / HTTP layer / translation cache / client pure functions / i18n)
+npm test              # node:test unit tests (59 cases: frontmatter / roots / discovery / HTTP layer / translation cache / client pure functions / i18n)
 npm run check         # syntax check (lib / client / src)
 ```
 

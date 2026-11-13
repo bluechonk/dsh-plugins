@@ -8,7 +8,7 @@
 - 全局 `~/.agents/skills`（`user-agents`，rank 500）
 - 项目/工作区 `<projectRoot>/.dsh/skills`、`<projectRoot>/.agents/skills`（rank 100 / 200）
 
-界面按参考图实现：标题、作用域下拉、技能计数、搜索框、「已安装 N」分组、刷新、行内删除、详情弹窗（描述/范围/文件路径 + `[原文 | 译文]` 分段按钮）。
+界面按参考图实现：标题、作用域下拉、技能计数、搜索框、「已安装 N」分组、刷新、行内打开目录、详情弹窗（描述/范围/文件路径 + `[原文 | 译文]` 分段按钮）。
 
 插件标识（包名、loader 行 id、client 模块 id 三者统一带 `@bluechonk` scope）：
 
@@ -209,7 +209,7 @@ DSH 主题令牌在浅色下 `bg-layer-1` / `bg-layer-2` **都是纯白**，直�
 
 ## 八、国际化（2026-10-20）
 
-插件界面**跟随宿主的语言设置**：DSH 切到英文时，面板标题、工具条、列表、详情弹窗、删除弹窗与所有错误提示自动切成英文。
+插件界面**跟随宿主的语言设置**：DSH 切到英文时，面板标题、工具条、列表、详情弹窗与所有错误提示自动切成英文。
 
 ### 8.1 机制（宿主官方机制，与 dsh-usage-stats 一致）
 
@@ -403,3 +403,14 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 ## 十五、回滚
 
 `plugin_manager remove_bundle`（目标 `@bluechonk/dsh-skills-manager`），或在 profile 的 `cordis.patch.yml` 里把 `@bluechonk/dsh-skills-manager` 行置为 `disabled: true`。插件自身不写任何持久化数据（仅在 profile 目录留一份 `skills-manager.log` 审计日志）。
+
+## 十六、移除技能删除（2026-11-13）
+
+- 列表行去掉删除按钮与自绘二次确认弹窗：`confirmRemove` 状态、`removeSkill()`、`Modal` 导入与 `IconTrash` 图标一并移除。
+- host 半下线 `POST /remove`：`removeRoute()`、`insideNodeModules()` 与随之无用的 `lstatSync` / `rmSync` / `unlinkSync` / `isManagedRoot` / `realPathOf` 导入一并删除。
+- 列表行保留「打开目录」，并扩展到所有有本地文件的技能（此前只有只读技能有）；行内按钮类名从 `dsm-trash` 改为 `dsm-iconBtnSm`——原样式的红色 hover 是 destructive 语义，留给「打开目录」会误导。
+- i18n 清掉 `action.delete` / `action.cancel` / `delete.*` / `error.delete-root-refused` / `error.skill-not-writable` / `error.skill-readonly`。
+- 单测：删掉「写操作后状态立刻反映」「删除根目录下平铺的 skill.md 不会抹掉整个根」2 项，新增「删除路由已下线」与「`refresh=1` 绕过扫描缓存」2 项（后者补上写操作消失后的缓存覆盖面），共 59 项全绿。
+- 顺带清掉因此失去调用方的 `loadRef`（原为写后刷新保留的最新加载器引用）与 `roots.js` 的 `isManagedRoot()`（原为删除把守受管根）。
+
+验证：`npm run check` 16 个文件通过，`npm test` 59 项全绿，`npm run index:check` 通过。
