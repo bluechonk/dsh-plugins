@@ -49,6 +49,13 @@ export function apply(ctx, config = {}) {
   const profile = ctx.get('profileContext')
   const profileDir = profile && typeof profile.dir === 'string' ? profile.dir : process.cwd()
 
+  // 「打开目录」要拉起系统文件管理器。默认走 node:child_process；单测注入桩，
+  // 免得为了验证真的弹出资源管理器窗口。
+  const spawnForReveal = typeof config.spawnForReveal === 'function'
+    ? config.spawnForReveal
+    : (command, args) => import('node:child_process')
+      .then(({ spawn }) => spawn(command, args, { detached: true, stdio: 'ignore' }))
+
   const log = (message) => {
     try {
       mkdirSync(profileDir, { recursive: true })
@@ -653,12 +660,13 @@ export function apply(ctx, config = {}) {
       return sendError(response, 403, '拒绝打开技能目录之外的路径', undefined, 'outside-root')
     }
     if (!existsSync(dir)) return sendError(response, 404, '目录不存在：' + dir, undefined, 'dir-missing', { path: dir })
-    const { spawn } = await import('node:child_process')
     const command = process.platform === 'win32' ? 'explorer.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open'
     // 平铺 .md 技能没有独立目录：打开文件本身（资源管理器会定位到该文件）。
     const target = skill.isFlat ? resolve(skill.path) : dir
-    const child = spawn(command, [target], { detached: true, stdio: 'ignore' })
-    child.unlink()
+    const child = await spawnForReveal(command, [target])
+    // detached 的子进程不接回父进程事件循环：用 unref()（Node 没有 unlink），
+    // 否则 DSH 退出时会被这个 explorer/open 子进程拖住。
+    child.unref()
     log('opened directory: ' + target)
     sendJson(response, 200, { ok: true, opened: dir })
   }

@@ -85,7 +85,7 @@ function makeHost(options = {}) {
       return () => routes.delete(route.path)
     },
   }
-  apply(ctx, {})
+  apply(ctx, options.config || {})
   return { home, skillsRoot, routes }
 }
 
@@ -294,6 +294,37 @@ test('未登记的技能返回 404', async () => {
       body: JSON.stringify({ name: 'not-exist' }),
     })
     assert.equal(missing.statusCode, 404)
+  } finally {
+    rmSync(host.home, { recursive: true, force: true })
+  }
+})
+
+test('打开目录：拉起文件管理器后 unref 子进程，不再调不存在的 unlink', async () => {
+  const spawned = []
+  let unrefed = 0
+  // 桩故意只给 unref、不给 unlink：一旦实现回退成 child.unlink() 就会抛异常
+  const host = makeHost({
+    config: {
+      spawnForReveal: async (command, args) => {
+        spawned.push([command, args])
+        return { unref() { unrefed += 1 } }
+      },
+    },
+  })
+  try {
+    const dir = join(host.skillsRoot, 'demo')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: demo\ndescription: 演示\n---\n', 'utf8')
+
+    const response = await call(host, '/dsh-skills-manager/reveal', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'demo' }),
+    })
+    assert.equal(response.statusCode, 200)
+    assert.equal(response.json().ok, true)
+    assert.equal(spawned.length, 1, '应拉起一次系统文件管理器')
+    assert.deepEqual(spawned[0][1], [dir], '打开的应是技能所在目录')
+    assert.equal(unrefed, 1, '必须 unref，否则 DSH 退出会被子进程拖住')
   } finally {
     rmSync(host.home, { recursive: true, force: true })
   }
