@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "In-conversation visualizations",
-    "description": "Lets the model render an HTML page as an interactive in-conversation visualization: the model writes the page to a file and drops a viz fence in its reply, and the plugin renders it in a sandboxed iframe."
+    "description": "Lets the model render an HTML page as an interactive in-conversation visualization: the model writes the page to a file and drops a visualize fence in its reply, and the plugin renders it in a sandboxed iframe."
   }
 }

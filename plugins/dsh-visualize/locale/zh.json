@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "对话内可视化",
-    "description": "让模型把 HTML 页面作为对话内可交互可视化渲染：模型把页面写成文件、在回复里放一个 viz 围栏，插件用沙箱 iframe 内联渲染。"
+    "description": "让模型把 HTML 页面作为对话内可交互可视化渲染：模型把页面写成文件、在回复里放一个 visualize 围栏，插件用沙箱 iframe 内联渲染。"
   }
 }

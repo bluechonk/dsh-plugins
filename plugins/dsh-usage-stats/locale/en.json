@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Usage Stats",
+    "description": "Sidebar Usage Stats module: six-cell summary strip, GitHub-style token activity heatmap, per-model daily trend chart and model usage donut. All data comes from local session logs."
+  }
+}
