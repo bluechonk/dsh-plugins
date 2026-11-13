@@ -36,13 +36,15 @@ export function projectRootOf(cwd) {
 
 /**
  * 求某个 cwd 下的项目级技能根。
+ *
+ * 只认 `<root>/.agents/skills`：`<root>/.dsh/skills` 是项目配置目录，不计入技能来源，
+ * 避免同一个工作区的技能被算两次。
  * @param {string | undefined} cwd
  * @returns {Array<{ label: string, path: string, rank: number, kind: string }>}
  */
 export function projectRootsFor(cwd) {
   const root = projectRootOf(cwd)
   return [
-    { label: 'project-dsh', path: join(root, '.dsh', 'skills'), rank: 100, kind: 'project' },
     { label: 'project-agents', path: join(root, '.agents', 'skills'), rank: 200, kind: 'project' },
   ]
 }

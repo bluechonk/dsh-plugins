@@ -25,10 +25,11 @@ Package name, loader row id and client module id all use the `@bluechonk` scope;
 
 | Area | Description |
 |---|---|
-| Scope dropdown | "User · Local" shows **only** the global `~/.dsh/skills`, the user-level `~/.agents/skills` and the preset built-ins; a "Workspaces" group lists every workspace, and picking one shows **only that workspace's** `<workspace>/.dsh/skills` and `<workspace>/.agents/skills` (global and user-level skills are not mixed in). Switching workspaces only rescans that workspace |
-| Skill count | "Skills N" at the top is the number of skills visible in the current scope |
+| Header | Title + search field + refresh button (always visible in the top-right corner; labels follow the host language) |
 | Search | Filters live as you type (name / description / path / source) — no Enter needed; a clear button appears once there is text |
-| Installed list | Name + description + open-folder button (for skills with local files) |
+| Source filter | "All / Global / User-level / Built-in / Workspace" pills (each with its own count), stacked with the search box; display-only, never mutates data. Definitions: **Global** = `~/.dsh/skills`, **User-level** = `~/.agents/skills`, **Built-in** = preset/custom directories plus registry-provided skills (no local file), **Workspace** = each registered workspace's `.agents/skills`. **The default view is everything** — the host reads whichever workspaces DSH currently has open and returns every source in one listing |
+| Skill list | **One skill per row**: icon (sparkle for writable skills, layers for read-only), name, two-line description, source badge (Global / User-level / Built-in / Workspace), read-only marker and an open-folder action at the right; click a row to open details |
+| Source groups | "All" groups by category (Global / User-level / Built-in, with workspaces grouped by workspace and per-group counts); the "Workspace" view groups by workspace; single-category views are flat |
 | Compatibility hint | DSH requires both `name` and `description` in the frontmatter and rejects legacy invocation keys — skills that break those rules are flagged "Not loaded by DSH" (the host ignores such files entirely) |
 | Built-in group | Skills registered at runtime or shipped inside a package are shown read-only, grouped by source; **the body of a built-in skill is read from the host registry** (packaged skills such as the Office ones have no local file) |
 | Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in) and the file path (inline monospace path + copy icon) |

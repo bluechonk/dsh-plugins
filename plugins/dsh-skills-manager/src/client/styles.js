@@ -6,9 +6,8 @@
 
 // 视觉规格对齐 ZCode 的「技能」页（实测取值）：
 //   标题 30px/600/-0.75px、内容列 max-w-4xl(896px) 居中、块间距 32px、
-//   工具条 justify-between + 12px 间隔、作用域按钮 28px 胶囊、搜索框 36px/12px 圆角/256px、
-//   卡片 12px 圆角无描边、行高 65px/内距 12px 16px、图标块 36px/12px 圆角、
-//   名称 14px/400、描述 12px 60%、开关 32x18（开=前景色轨 + 背景色钮）。
+//   搜索框 36px/12px 圆角/256px、卡片圆角 14px、图标块 36px/12px 圆角、
+//   名称 14px/500、描述 12.5px。列表区 2026-11-13 改为网格卡片（见 docs）。
 export const CSS = [
   // —— 主面板页骨架 ——
   // main 槽位不给页头、内边距与滚动，页面自持（与官方「自动化任务」页一致）。
@@ -16,18 +15,12 @@ export const CSS = [
   ".dsm-pageScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}",
   ".dsm-pageContent{max-width:960px;margin:0 auto;padding:28px clamp(24px,4vw,48px) 0}",
   "[data-platform=darwin] .dsm-pageContent{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}",
-  ".dsm-root{display:flex;flex-direction:column;gap:32px;min-width:0;max-width:896px;margin:0 auto;padding-bottom:40px;color:var(--dsw-alias-label-primary);font-size:14px}",
+  ".dsm-root{display:flex;flex-direction:column;gap:24px;min-width:0;max-width:896px;margin:0 auto;padding-bottom:40px;color:var(--dsw-alias-label-primary);font-size:14px}",
   ".dsm-title{font-size:30px;font-weight:600;letter-spacing:-.75px;line-height:36px;margin:0}",
-  // —— 顶部工具条 ——
-  ".dsm-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}",
-  ".dsm-toolbarLeft{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0}",
-  ".dsm-scope{position:relative;flex:none}",
-  ".dsm-scopeBtn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:9999px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
-  ".dsm-scopeBtn:hover{background:var(--dsw-alias-bg-layer-1)}",
-  ".dsm-divider{width:1px;height:20px;background:var(--dsw-alias-border-l1);flex:none}",
-  ".dsm-meta{color:var(--dsw-alias-label-secondary);font-size:14px;white-space:nowrap}",
-  ".dsm-meta b{font-weight:400;color:var(--dsw-alias-label-secondary)}",
-  ".dsm-searchWrap{position:relative;display:flex;align-items:center;width:256px;max-width:100%;flex:none}",
+  // —— 头部：标题 + 搜索 + 刷新 ——
+  ".dsm-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}",
+  ".dsm-headActions{display:flex;align-items:center;gap:8px;min-width:0}",
+  ".dsm-searchWrap{position:relative;display:flex;align-items:center;width:256px;max-width:100%}",
   ".dsm-searchWrap .dsm-searchIcon{position:absolute;left:10px;pointer-events:none;color:var(--dsw-alias-label-secondary)}",
   ".dsm-search{width:100%;height:36px;padding:0 30px 0 36px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;outline:none}",
   ".dsm-searchClear{position:absolute;right:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
@@ -35,38 +28,39 @@ export const CSS = [
   ".dsm-searchClear svg{width:12px;height:12px}",
   ".dsm-search:focus{border-color:var(--dsw-alias-brand-primary)}",
   ".dsm-search::placeholder{color:var(--dsw-alias-label-secondary)}",
-  // —— 分组标题 ——
-  ".dsm-sectionHead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}",
-  ".dsm-sectionTitle{font-size:14px;font-weight:400;color:var(--dsw-alias-label-primary)}",
-  ".dsm-sectionCount{color:var(--dsw-alias-label-secondary);font-weight:400;font-size:12px;margin-left:2px}",
-  ".dsm-actions{display:flex;align-items:center;gap:8px}",
-  ".dsm-iconBtn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
+  ".dsm-iconBtn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
   ".dsm-iconBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
   // 回到顶部：浮动在面板右下角，只在滚过标题与工具条后出现
-  ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+  ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
   ".dsm-backTop:hover{background:var(--dsw-alias-bg-layer-2)}",
   ".dsm-primary{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px 0 6px;border-radius:8px;border:1px solid transparent;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
   ".dsm-primary:disabled{opacity:.5;cursor:not-allowed}",
-  // —— 列表 ——
-  ".dsm-list{display:flex;flex-direction:column;border-radius:12px;overflow:hidden;background:color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent)}",
-  ".dsm-row{display:flex;align-items:center;gap:12px;min-height:65px;padding:12px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);cursor:pointer}",
-  ".dsm-row:last-child{border-bottom:none}",
-  ".dsm-row:hover{background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}",
-  ".dsm-icon{width:36px;height:36px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);color:var(--dsw-alias-label-secondary)}",
-  ".dsm-rowMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}",
-  ".dsm-name{font-size:14px;font-weight:400;line-height:21px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  ".dsm-desc{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  ".dsm-badges{display:flex;gap:6px;align-items:center;flex:none}",
+  // —— 来源筛选 ——
+  ".dsm-filterRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}",
+  ".dsm-chips{display:inline-flex;gap:4px;padding:3px;background:var(--dsw-alias-bg-layer-2);border-radius:10px}",
+  ".dsm-chip{border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;padding:5px 11px;cursor:pointer;transition:background .15s,color .15s}",
+  ".dsm-chip:hover{color:var(--dsw-alias-label-primary)}",
+  ".dsm-chip[data-on=\"true\"]{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:500}",
+  // —— 技能列表（一行一个）——
+  ".dsm-list{display:flex;flex-direction:column;gap:8px}",
+  ".dsm-group + .dsm-group{margin-top:22px}",
+  ".dsm-groupTitle{font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:400;margin:0 0 10px}",
+  ".dsm-card{position:relative;display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .16s,background .16s}",
+  ".dsm-card:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-2)}",
+  ".dsm-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}",
+  ".dsm-cardIcon{width:36px;height:36px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);color:var(--dsw-alias-label-secondary)}",
+  ".dsm-cardIcon svg{width:18px;height:18px}",
+  ".dsm-cardMain{flex:1;min-width:0}",
+  ".dsm-cardTitle{display:flex;align-items:center;gap:8px;min-width:0}",
+  ".dsm-name{font-size:14px;font-weight:500;line-height:21px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".dsm-cardDesc{margin:2px 0 0;color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}",
+  ".dsm-cardFoot{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:none}",
+  ".dsm-badgeCat{border-color:color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);color:var(--dsw-alias-brand-primary)}",
+  ".dsm-cardOpen{width:26px;height:26px;flex:none;padding:0;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:.75}",
+  ".dsm-cardOpen:hover{opacity:1;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}",
+  ".dsm-emptyGrid{padding:36px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:13px}",
   ".dsm-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap}",
   ".dsm-badgeWarn{color:var(--dsw-alias-state-warning,var(--dsw-alias-label-secondary));border-color:color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 45%, transparent)}",
-  ".dsm-rowMainTitle{display:flex;align-items:center;gap:8px;min-width:0}",
-  ".dsm-groupTitle{padding:10px 4px 6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:600}",
-  // —— 下拉菜单 ——
-  ".dsm-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:230px;padding:6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:2px}",
-  ".dsm-menuItem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;width:100%}",
-  ".dsm-menuItem:hover{background:var(--dsw-alias-bg-layer-2)}",
-  ".dsm-menuItem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  ".dsm-menuLabel{padding:8px 10px 4px;color:var(--dsw-alias-label-secondary);font-size:12px}",
   // —— 弹窗 ——
   ".dsm-overlay{position:fixed;inset:0;z-index:60;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:24px}",
   ".dsm-modal{width:min(680px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);box-shadow:0 24px 64px rgba(0,0,0,.32);overflow:hidden}",
@@ -105,8 +99,6 @@ export const CSS = [
   // 文本按钮：图标按钮是 30px 方形，装不下「取消」这类文字
   ".dsm-btnText{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;white-space:nowrap;cursor:pointer}",
   ".dsm-btnText:hover{background:var(--dsw-alias-bg-layer-2)}",
-  ".dsm-select{position:relative}",
-  ".dsm-selectBtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}",
   // —— 表单 ——
   ".dsm-field{display:flex;flex-direction:column;gap:6px}",
   ".dsm-input{height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;outline:none}",

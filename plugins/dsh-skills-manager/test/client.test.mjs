@@ -64,7 +64,7 @@ test('interpolate 填占位符，未命中的保留原样', () => {
 test('fallbackT 无宿主 t 时输出中文', () => {
   const t = P.fallbackT()
   assert.equal(t('section.title'), '技能')
-  assert.equal(t('section.installed'), '已安装')
+  assert.equal(t('filter.workspace'), '工作区')
   assert.equal(t('not-exist-key'), 'not-exist-key')
 })
 

@@ -11,8 +11,16 @@
 import { readFileSync } from 'node:fs'
 
 import { allowedRoots, resolveVisualizeFile } from './visualize-path.js'
+import { registerBundledSkill } from './skill.js'
 
 export const name = '@bluechonk/dsh-visualize'
+
+/**
+ * 依赖的宿主服务：技能注册表（挂随包技能）、Web 路由、插件清单。
+ * 与官方 office 技能一致用静态 inject 声明，保证 apply 时服务已就绪
+ * （运行时 `ctx.inject` 只等「组合里声明过」的服务）。
+ */
+export const inject = ['skills', 'webServer', 'loader']
 
 const API_BASE = '/dsh-visualize'
 
@@ -76,6 +84,10 @@ function sendText(response, status, body) {
 }
 
 export function apply(ctx, config = {}) {
+  // 随包技能：等 skills 服务就绪后把包内 SKILL.md 挂成内置技能，
+  // 技能面板与模型都能直接看到，不必让用户手动拷进某个技能根。
+  ctx.inject(['skills'], () => { registerBundledSkill(ctx, config) })
+
   ctx.inject(['webServer', 'loader'], (host) => {
     const webServer = host.webServer || ctx.get('webServer')
     if (!webServer || typeof webServer.register !== 'function') return

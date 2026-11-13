@@ -2,10 +2,10 @@
 
 import { h, getReact } from "./runtime.js";
 import { apiGet, apiPost } from "./api.js";
-import { t, tr, setT, fallbackT, filterSkills, rootTitleOf, localizeError, LOCALE_NS, LOCALE_DICT } from "./i18n.js";
+import { t, tr, setT, fallbackT, filterSkills, localizeError, LOCALE_NS, LOCALE_DICT } from "./i18n.js";
 import { ensureStyles } from "./styles.js";
-import { IconMonitor, IconFolder, IconSearch, IconClose, IconRefresh, IconArrowUp, IconSparkle, IconLayers, IconCheck, IconCaret } from "./icons.js";
-import { Dropdown, IconButton } from "./components.js";
+import { IconFolder, IconSearch, IconClose, IconRefresh, IconArrowUp, IconSparkle, IconLayers } from "./icons.js";
+import { IconButton } from "./components.js";
 import { DetailModal } from "./detail.js";
 import { parseInline, parseMarkdown, mergeChunks, translationChunks, localeDict } from "./pure.js";
 
@@ -68,20 +68,18 @@ function Panel(props) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [scope, setScope] = useState({ kind: "global", path: "", title: "" });
+  const [category, setCategory] = useState("all");
   const [detail, setDetail] = useState(null);
   const [notice, setNotice] = useState(null);
-  // 请求序号：作用域快速切换时，过期响应不得覆盖新数据。
+  // 请求序号：连续刷新时，过期响应不得覆盖新数据。
   const requestSeq = useRef(0);
-
-  const cwd = scope.kind === "project" ? scope.path : "";
 
   const load = useCallback((useRefresh) => {
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;
     setLoading(true);
+    // 不带 cwd：宿主返回全局 + 用户级 + 所有已登记工作区的技能，由客户端按来源分类。
     const params = {};
-    if (cwd) params.cwd = cwd;
     // 手动刷新时让宿主绕过缓存，强制重扫磁盘。
     if (useRefresh) params.refresh = "1";
     apiGet("/state", params)
@@ -98,14 +96,14 @@ function Panel(props) {
         if (seq !== requestSeq.current) return;
         setLoading(false);
       });
-  }, [cwd]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const skills = (state && state.skills) || [];
-  const totals = (state && state.totals) || { skills: 0, installed: 0 };
 
   const roots = useMemo(() => (state && state.roots) || [], [state]);
+  const workspaces = useMemo(() => (state && state.workspaces) || [], [state]);
   const rootTitle = useMemo(() => {
     const map = new Map();
     for (const root of roots) map.set(root.label, root.title);
@@ -123,45 +121,89 @@ function Panel(props) {
 
   const filtered = useMemo(() => filterSkills(skills, search), [skills, search]);
 
-  const installed = useMemo(
-    () => filtered.filter((skill) => writableSources.has(skill.source) && skill.exists),
-    [filtered, writableSources],
-  );
-  const builtin = useMemo(
-    () => filtered.filter((skill) => !(writableSources.has(skill.source) && skill.exists)),
-    [filtered, writableSources],
+  // 根标签 → 作用域分类（宿主给出）：工作区根与其余可写根分开统计。
+  const sourceKindOf = useMemo(() => {
+    const map = new Map();
+    for (const root of roots) map.set(root.label, root.kind);
+    return map;
+  }, [roots]);
+
+  /**
+   * 技能属于哪个筛选分类（口径与 DSH 的根语义一致）：
+   *   全局 = `<dshHome>/skills`；用户级 = `<agentsHome>/skills`；
+   *   内置 = 预设/自定义目录与注册表提供（没有本地文件）的技能；工作区 = 已登记工作区的 `.agents/skills`。
+   */
+  const categoryOf = useCallback((skill) => {
+    if (!(writableSources.has(skill.source) && skill.exists)) return "bundled";
+    if (skill.source === "user-dsh") return "global";
+    if (skill.source === "user-agents") return "user";
+    return sourceKindOf.get(skill.source) === "project" ? "workspace" : "bundled";
+  }, [writableSources, sourceKindOf]);
+
+  const counts = useMemo(() => {
+    const value = { all: filtered.length, global: 0, user: 0, bundled: 0, workspace: 0 };
+    for (const skill of filtered) value[categoryOf(skill)] += 1;
+    return value;
+  }, [filtered, categoryOf]);
+
+  // 「全部」= 当前搜索下的全部；其余胶囊只看自己那一类。
+  const selected = useMemo(
+    () => filtered.filter((skill) => category === "all" || categoryOf(skill) === category),
+    [filtered, category, categoryOf],
   );
 
-  const builtinGroups = useMemo(() => {
-    const groups = new Map();
-    for (const skill of builtin) {
-      const key = skill.source || "runtime";
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(skill);
+  // 工作区技能的分组名取工作区标题（宿主给出的已登记工作区），其余取根展示名。
+  const workspaceTitleOf = useCallback((skill) => {
+    const rootPath = String(skill.rootPath || "");
+    for (const workspace of workspaces) {
+      if (workspace.path !== "" && rootPath.startsWith(workspace.path)) return workspace.title;
     }
-    return [...groups.entries()];
-  }, [builtin]);
+    return rootTitle.get(skill.source) || skill.source;
+  }, [workspaces, rootTitle]);
 
-  const scopeLabel = scope.kind === "project" ? scope.title + " " + tt("scope.localSuffix") : tt("scope.user");
+  /** 反查技能所在工作区的路径；不在任何工作区下时返回空串（全局作用域）。 */
+  const workspacePathOf = useCallback((skill) => {
+    const rootPath = String(skill.rootPath || "");
+    for (const workspace of workspaces) {
+      if (workspace.path !== "" && rootPath.startsWith(workspace.path)) return workspace.path;
+    }
+    return "";
+  }, [workspaces]);
+
+  // 只有「全部」需要按来源分组（工作区再按工作区分）；单一分类视图平铺即可。
+  const groupBySource = category === "all" || category === "workspace";
+  const groups = useMemo(() => {
+    if (!groupBySource) return [];
+    const map = new Map();
+    for (const skill of selected) {
+      const cat = categoryOf(skill);
+      const key = cat === "workspace" ? workspaceTitleOf(skill) : tt("badge." + cat);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(skill);
+    }
+    return [...map.entries()];
+  }, [selected, groupBySource, categoryOf, workspaceTitleOf, tt]);
 
   const openDirectory = async (skill) => {
     setNotice(null);
     try {
-      await apiPost("/reveal", { name: skill.name, cwd });
+      // 工作区技能要把所在工作区作为 cwd 传回去，否则宿主只在全局根里找这个名字。
+      await apiPost("/reveal", { name: skill.name, cwd: workspacePathOf(skill) });
     } catch (err) {
       setNotice(localizeError(err));
     }
   };
 
-  const renderRow = (skill) => {
+  const renderCard = (skill) => {
     const writable = writableSources.has(skill.source) && skill.exists;
     // DSH 兼容性：缺 description / 含旧式调用键的技能，DSH 会整个文件忽略。
     const issues = Array.isArray(skill.issues) ? skill.issues : [];
     const blocked = issues.length > 0;
     const issueText = issues.map((issue) => tt("issue." + issue, {})).join("；");
-    return h("div", {
+    const cardCategory = categoryOf(skill);
+    return h("article", {
       key: skill.name,
-      className: "dsm-row",
+      className: "dsm-card",
       role: "button",
       tabIndex: 0,
       onClick: () => setDetail(skill),
@@ -172,76 +214,69 @@ function Panel(props) {
         }
       },
     },
-      h("div", { className: "dsm-icon" }, writable ? h(IconSparkle, null) : h(IconLayers, null)),
-      h("div", { className: "dsm-rowMain" },
-        h("div", { className: "dsm-rowMainTitle" },
-          h("div", { className: "dsm-name", title: skill.name }, skill.name),
+      // 图标沿用原设计：可写技能四角星、只读技能叠层。
+      h("div", { className: "dsm-cardIcon" }, writable ? h(IconSparkle, null) : h(IconLayers, null)),
+      h("div", { className: "dsm-cardMain" },
+        h("div", { className: "dsm-cardTitle" },
+          h("span", { className: "dsm-name", title: skill.name }, skill.name),
           blocked ? h("span", { className: "dsm-badge dsm-badgeWarn", title: tt("list.blockedTitle", { reason: issueText }) }, tt("list.blockedBadge")) : null,
         ),
-        h("div", { className: "dsm-desc", title: skill.description }, skill.description || tt("detail.noDescription")),
+        h("p", { className: "dsm-cardDesc", title: skill.description || undefined },
+          skill.description || tt("detail.noDescription")),
       ),
-      writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly")),
+      h("div", { className: "dsm-cardFoot" },
+        h("span", { className: "dsm-badge" + (cardCategory === "bundled" ? " dsm-badgeCat" : "") }, tt("badge." + cardCategory)),
+        writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly")),
+      ),
       skill.path
-        ? IconButton({ className: "dsm-iconBtnSm", label: "打开目录 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null))
+        ? IconButton({ className: "dsm-cardOpen", label: "打开目录 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null))
         : null,
     );
   };
 
   return h("div", { className: "dsm-root" },
-    h("h1", { className: "dsm-title" }, tt("section.title")),
-
-    h("div", { className: "dsm-toolbar" },
-      h("div", { className: "dsm-toolbarLeft" },
-        h(Dropdown, {
-          className: "dsm-scope",
-          buttonClassName: "dsm-scopeBtn",
-          trigger: h("span", { style: { display: "inline-flex", alignItems: "center", gap: "8px" } },
-            scope.kind === "project" ? h(IconFolder, null) : h(IconMonitor, null),
-            h("span", null, scopeLabel),
-          ),
-          children: (close) => [
-            h("button", {
-              key: "global",
+    h("div", { className: "dsm-head" },
+      h("h1", { className: "dsm-title" }, tt("section.title")),
+      h("div", { className: "dsm-headActions" },
+        h("div", { className: "dsm-searchWrap" },
+          h(IconSearch, { className: "dsm-searchIcon" }),
+          h("input", {
+            className: "dsm-search",
+            value: search,
+            placeholder: tt("toolbar.search"),
+            onChange: (event) => setSearch(event.target.value),
+          }),
+          search
+            ? h("button", {
               type: "button",
-              className: "dsm-menuItem",
-              onClick: () => { setScope({ kind: "global", path: "", title: "" }); close(); },
-            }, h(IconMonitor, null), h("span", null, tt("scope.user")), scope.kind === "global" ? h(IconCheck, null) : null),
-            h("div", { key: "label", className: "dsm-menuLabel" }, tt("scope.group.workspaces")),
-            ((state && state.workspaces) || []).map((workspace) => h("button", {
-              key: workspace.id,
-              type: "button",
-              className: "dsm-menuItem",
-              onClick: () => { setScope({ kind: "project", path: workspace.path, title: workspace.title }); close(); },
-            }, h(IconFolder, null), h("span", null, workspace.title + " " + tt("scope.localSuffix")), scope.path === workspace.path ? h(IconCheck, null) : null)),
-          ],
-        }),
-        h("div", { className: "dsm-divider" }),
-        h("div", { className: "dsm-meta" }, tt("toolbar.count", { n: totals.skills || 0 })),
-      ),
-      h("div", { className: "dsm-searchWrap" },
-        h(IconSearch, { className: "dsm-searchIcon" }),
-        h("input", {
-          className: "dsm-search",
-          value: search,
-          placeholder: tt("toolbar.search"),
-          onChange: (event) => setSearch(event.target.value),
-        }),
-        search
-          ? h("button", {
-            type: "button",
-            className: "dsm-searchClear",
-            "aria-label": tt("toolbar.clearSearch"),
-            title: tt("toolbar.clearSearch"),
-            onClick: () => setSearch(""),
-          }, h(IconClose, null))
-          : null,
+              className: "dsm-searchClear",
+              "aria-label": tt("toolbar.clearSearch"),
+              title: tt("toolbar.clearSearch"),
+              onClick: () => setSearch(""),
+            }, h(IconClose, null))
+            : null,
+        ),
+        IconButton({ className: "dsm-iconBtn", label: tt("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null)),
       ),
     ),
 
-    h("div", { className: "dsm-sectionHead" },
-      h("div", { className: "dsm-sectionTitle" }, tt("section.installed"), h("span", { className: "dsm-sectionCount" }, String(installed.length))),
-      h("div", { className: "dsm-actions" },
-        IconButton({ className: "dsm-iconBtn", label: tt("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null)),
+    // 来源筛选：分类与数量都在这一行，内容随选择切换；不再有作用域下拉。
+    h("div", { className: "dsm-filterRow" },
+      h("div", { className: "dsm-chips", role: "group" },
+        [
+          { key: "all", label: tt("filter.all"), count: counts.all },
+          { key: "global", label: tt("filter.global"), count: counts.global },
+          { key: "user", label: tt("filter.user"), count: counts.user },
+          { key: "bundled", label: tt("filter.bundled"), count: counts.bundled },
+          { key: "workspace", label: tt("filter.workspace"), count: counts.workspace },
+        ].map((item) => h("button", {
+          key: item.key,
+          type: "button",
+          className: "dsm-chip",
+          "data-on": String(category === item.key),
+          "aria-pressed": String(category === item.key),
+          onClick: () => setCategory(item.key),
+        }, item.label + " " + item.count)),
       ),
     ),
 
@@ -258,27 +293,18 @@ function Panel(props) {
           h("div", { style: { marginTop: "10px" } },
             h("button", { type: "button", className: "dsm-primary", onClick: load }, h("span", null, "重试"))),
         )
-        : installed.length === 0 && builtin.length === 0
-          ? h("div", { className: "dsm-state" }, tt("state.empty"))
-          : null,
+        : !state
+          ? null
+          : selected.length === 0
+            ? h("div", { className: "dsm-state" }, tt("state.empty"))
+            : groupBySource
+              ? groups.map(([name, items]) => h("div", { key: name, className: "dsm-group" },
+                h("div", { className: "dsm-groupTitle" }, name + " · " + items.length),
+                h("div", { className: "dsm-list" }, items.map(renderCard)),
+              ))
+              : h("div", { className: "dsm-list" }, selected.map(renderCard)),
 
-    installed.length > 0
-      ? h("div", { className: "dsm-list" }, installed.map(renderRow))
-      : null,
-
-    builtinGroups.length > 0
-      ? h("div", null,
-        h("div", { className: "dsm-sectionHead" },
-          h("div", { className: "dsm-sectionTitle" }, tt("section.builtin"), h("span", { className: "dsm-sectionCount" }, String(builtin.length))),
-        ),
-        builtinGroups.map(([source, group]) => h("div", { key: source },
-          h("div", { className: "dsm-groupTitle" }, rootTitleOf(source) + " · " + group.length),
-          h("div", { className: "dsm-list" }, group.map(renderRow)),
-        )),
-      )
-      : null,
-
-    detail ? h(DetailModal, { t: tt, skill: detail, cwd, onClose: () => setDetail(null) }) : null,
+    detail ? h(DetailModal, { t: tt, skill: detail, cwd: "", onClose: () => setDetail(null) }) : null,
   );
 }
 

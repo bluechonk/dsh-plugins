@@ -29,7 +29,7 @@
 //      精确千分位只出现在元素的 title 悬停说明里。
 //   ④ 模型键用 SPEC 主键 provider/model（models 路由的 key）——不同供应商同名模型会
 //      撞色撞名，全串无歧义；模型用量环图例与扇区悬停卡片再剥掉第一段提供商前缀
-//      （modelLabelOf），趋势图图例保留全串。
+//      （modelLabelOf），趋势图图例与悬停行同样剥前缀，只把全串留在原生 title 里。
 //   ⑤ 趋势折线最多画用量最高的 6 个模型（图例/折线/悬停行共用同一份清单），
 //      不做「其他模型」归并（归并是环形图的明文要求）；被截掉的模型数在悬停卡片里按
 //      「悬停日当天」注明（区间级会天天显示同一个数）。
@@ -1130,7 +1130,7 @@ window.__ModuleLoader__.load({
         props.title === null || props.title === undefined ? null : el("div", { className: "dus-tipH" }, props.title),
         rows.map((r) => el("div", { key: r.key, className: r.off === true ? "dus-tipR dus-tipROff" : "dus-tipR" },
           el("i", { className: "dus-dot", style: r.color === "" ? undefined : { background: r.color } }),
-          el("span", { className: "dus-tipN", title: r.key }, r.key),
+          el("span", { className: "dus-tipN", title: r.key }, modelLabelOf(r.key)),
           el("span", { className: "dus-tipV" }, r.value),
           el("span", { className: "dus-tipU" }, "tokens"),
         )),
@@ -1474,7 +1474,7 @@ window.__ModuleLoader__.load({
               title: m.key,
             },
               el("i", { className: "dus-legendSw", style: { background: m.color } }),
-              m.key,
+              modelLabelOf(m.key),
             )),
           ),
           el("div", wrapProps,

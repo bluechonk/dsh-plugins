@@ -15,6 +15,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const files = [
   "lib/index.js",
+  "lib/skill.js",
   "lib/visualize-path.js",
   "client/client.js",
   ...readdirSync(join(ROOT, "src", "client")).filter((name) => name.endsWith(".js")).map((name) => `src/client/${name}`),

@@ -16,14 +16,17 @@
   var LOCALE_DICT = {
     zh: {
       "section.title": "\u6280\u80FD",
-      "section.installed": "\u5DF2\u5B89\u88C5",
-      "section.builtin": "\u5185\u7F6E",
-      "toolbar.count": "\u6280\u80FD {n}",
+      "filter.all": "\u5168\u90E8",
+      "filter.global": "\u5168\u5C40",
+      "filter.user": "\u7528\u6237\u7EA7",
+      "filter.bundled": "\u5185\u7F6E",
+      "filter.workspace": "\u5DE5\u4F5C\u533A",
+      "badge.global": "\u5168\u5C40",
+      "badge.user": "\u7528\u6237\u7EA7",
+      "badge.bundled": "\u5185\u7F6E",
+      "badge.workspace": "\u5DE5\u4F5C\u533A",
       "toolbar.search": "\u641C\u7D22\u6280\u80FD...",
       "toolbar.clearSearch": "\u6E05\u9664\u641C\u7D22",
-      "scope.user": "\u7528\u6237 \xB7 \u672C\u673A",
-      "scope.localSuffix": "\xB7 \u672C\u673A",
-      "scope.group.workspaces": "\u5DE5\u4F5C\u533A",
       "scope.personal": "\u4E2A\u4EBA",
       "scope.builtin": "\u5185\u7F6E",
       "scope.workspace": "\u5DE5\u4F5C\u533A",
@@ -94,14 +97,17 @@
     },
     en: {
       "section.title": "Skills",
-      "section.installed": "Installed",
-      "section.builtin": "Built-in",
-      "toolbar.count": "Skills {n}",
+      "filter.all": "All",
+      "filter.global": "Global",
+      "filter.user": "User-level",
+      "filter.bundled": "Built-in",
+      "filter.workspace": "Workspace",
+      "badge.global": "Global",
+      "badge.user": "User-level",
+      "badge.bundled": "Built-in",
+      "badge.workspace": "Workspace",
       "toolbar.search": "Search skills...",
       "toolbar.clearSearch": "Clear search",
-      "scope.user": "User \xB7 Local",
-      "scope.localSuffix": "\xB7 Local",
-      "scope.group.workspaces": "Workspaces",
       "scope.personal": "Personal",
       "scope.builtin": "Built-in",
       "scope.workspace": "Workspace",
@@ -199,19 +205,6 @@
     }
     return text;
   }
-  var ROOT_TITLE_KEYS = {
-    "user-dsh": "root.userDsh",
-    "user-agents": "root.userAgents",
-    "project-dsh": "root.projectDsh",
-    "project-agents": "root.projectAgents",
-    custom: "root.custom",
-    bundled: "root.bundled",
-    runtime: "root.runtime"
-  };
-  function rootTitleOf(source) {
-    const key = ROOT_TITLE_KEYS[source];
-    return key ? tr(currentT, key) : String(source || "");
-  }
   function scopeTextOf(skill) {
     const source = skill.source || "";
     if (source === "project-dsh" || source === "project-agents") {
@@ -279,18 +272,12 @@
     ".dsm-pageScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}",
     ".dsm-pageContent{max-width:960px;margin:0 auto;padding:28px clamp(24px,4vw,48px) 0}",
     "[data-platform=darwin] .dsm-pageContent{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}",
-    ".dsm-root{display:flex;flex-direction:column;gap:32px;min-width:0;max-width:896px;margin:0 auto;padding-bottom:40px;color:var(--dsw-alias-label-primary);font-size:14px}",
+    ".dsm-root{display:flex;flex-direction:column;gap:24px;min-width:0;max-width:896px;margin:0 auto;padding-bottom:40px;color:var(--dsw-alias-label-primary);font-size:14px}",
     ".dsm-title{font-size:30px;font-weight:600;letter-spacing:-.75px;line-height:36px;margin:0}",
-    // —— 顶部工具条 ——
-    ".dsm-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}",
-    ".dsm-toolbarLeft{display:flex;flex-wrap:wrap;align-items:center;gap:12px;min-width:0}",
-    ".dsm-scope{position:relative;flex:none}",
-    ".dsm-scopeBtn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px;border-radius:9999px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
-    ".dsm-scopeBtn:hover{background:var(--dsw-alias-bg-layer-1)}",
-    ".dsm-divider{width:1px;height:20px;background:var(--dsw-alias-border-l1);flex:none}",
-    ".dsm-meta{color:var(--dsw-alias-label-secondary);font-size:14px;white-space:nowrap}",
-    ".dsm-meta b{font-weight:400;color:var(--dsw-alias-label-secondary)}",
-    ".dsm-searchWrap{position:relative;display:flex;align-items:center;width:256px;max-width:100%;flex:none}",
+    // —— 头部：标题 + 搜索 + 刷新 ——
+    ".dsm-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}",
+    ".dsm-headActions{display:flex;align-items:center;gap:8px;min-width:0}",
+    ".dsm-searchWrap{position:relative;display:flex;align-items:center;width:256px;max-width:100%}",
     ".dsm-searchWrap .dsm-searchIcon{position:absolute;left:10px;pointer-events:none;color:var(--dsw-alias-label-secondary)}",
     ".dsm-search{width:100%;height:36px;padding:0 30px 0 36px;border-radius:12px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font:inherit;font-size:14px;outline:none}",
     ".dsm-searchClear{position:absolute;right:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}",
@@ -298,38 +285,39 @@
     ".dsm-searchClear svg{width:12px;height:12px}",
     ".dsm-search:focus{border-color:var(--dsw-alias-brand-primary)}",
     ".dsm-search::placeholder{color:var(--dsw-alias-label-secondary)}",
-    // —— 分组标题 ——
-    ".dsm-sectionHead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}",
-    ".dsm-sectionTitle{font-size:14px;font-weight:400;color:var(--dsw-alias-label-primary)}",
-    ".dsm-sectionCount{color:var(--dsw-alias-label-secondary);font-weight:400;font-size:12px;margin-left:2px}",
-    ".dsm-actions{display:flex;align-items:center;gap:8px}",
-    ".dsm-iconBtn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
+    ".dsm-iconBtn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--dsw-alias-border-l2);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
     ".dsm-iconBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
     // 回到顶部：浮动在面板右下角，只在滚过标题与工具条后出现
-    ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+    ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
     ".dsm-backTop:hover{background:var(--dsw-alias-bg-layer-2)}",
     ".dsm-primary{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px 0 6px;border-radius:8px;border:1px solid transparent;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
     ".dsm-primary:disabled{opacity:.5;cursor:not-allowed}",
-    // —— 列表 ——
-    ".dsm-list{display:flex;flex-direction:column;border-radius:12px;overflow:hidden;background:color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent)}",
-    ".dsm-row{display:flex;align-items:center;gap:12px;min-height:65px;padding:12px 16px;border-bottom:1px solid var(--dsw-alias-border-l1);cursor:pointer}",
-    ".dsm-row:last-child{border-bottom:none}",
-    ".dsm-row:hover{background:color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)}",
-    ".dsm-icon{width:36px;height:36px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);color:var(--dsw-alias-label-secondary)}",
-    ".dsm-rowMain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}",
-    ".dsm-name{font-size:14px;font-weight:400;line-height:21px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-    ".dsm-desc{font-size:12px;color:var(--dsw-alias-label-secondary);line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-    ".dsm-badges{display:flex;gap:6px;align-items:center;flex:none}",
+    // —— 来源筛选 ——
+    ".dsm-filterRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}",
+    ".dsm-chips{display:inline-flex;gap:4px;padding:3px;background:var(--dsw-alias-bg-layer-2);border-radius:10px}",
+    ".dsm-chip{border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;padding:5px 11px;cursor:pointer;transition:background .15s,color .15s}",
+    ".dsm-chip:hover{color:var(--dsw-alias-label-primary)}",
+    '.dsm-chip[data-on="true"]{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 1px 2px rgba(0,0,0,.12);font-weight:500}',
+    // —— 技能列表（一行一个）——
+    ".dsm-list{display:flex;flex-direction:column;gap:8px}",
+    ".dsm-group + .dsm-group{margin-top:22px}",
+    ".dsm-groupTitle{font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:400;margin:0 0 10px}",
+    ".dsm-card{position:relative;display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-layer-1);cursor:pointer;transition:border-color .16s,background .16s}",
+    ".dsm-card:hover{border-color:var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-2)}",
+    ".dsm-card:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}",
+    ".dsm-cardIcon{width:36px;height:36px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);color:var(--dsw-alias-label-secondary)}",
+    ".dsm-cardIcon svg{width:18px;height:18px}",
+    ".dsm-cardMain{flex:1;min-width:0}",
+    ".dsm-cardTitle{display:flex;align-items:center;gap:8px;min-width:0}",
+    ".dsm-name{font-size:14px;font-weight:500;line-height:21px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+    ".dsm-cardDesc{margin:2px 0 0;color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}",
+    ".dsm-cardFoot{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:none}",
+    ".dsm-badgeCat{border-color:color-mix(in srgb, var(--dsw-alias-brand-primary) 40%, transparent);color:var(--dsw-alias-brand-primary)}",
+    ".dsm-cardOpen{width:26px;height:26px;flex:none;padding:0;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;opacity:.75}",
+    ".dsm-cardOpen:hover{opacity:1;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}",
+    ".dsm-emptyGrid{padding:36px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:13px}",
     ".dsm-badge{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:11.5px;white-space:nowrap}",
     ".dsm-badgeWarn{color:var(--dsw-alias-state-warning,var(--dsw-alias-label-secondary));border-color:color-mix(in srgb, var(--dsw-alias-state-warning,#d29922) 45%, transparent)}",
-    ".dsm-rowMainTitle{display:flex;align-items:center;gap:8px;min-width:0}",
-    ".dsm-groupTitle{padding:10px 4px 6px;font-size:12.5px;color:var(--dsw-alias-label-secondary);font-weight:600}",
-    // —— 下拉菜单 ——
-    ".dsm-menu{position:absolute;z-index:40;top:calc(100% + 6px);left:0;min-width:230px;padding:6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 12px 32px rgba(0,0,0,.28);display:flex;flex-direction:column;gap:2px}",
-    ".dsm-menuItem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;text-align:left;cursor:pointer;width:100%}",
-    ".dsm-menuItem:hover{background:var(--dsw-alias-bg-layer-2)}",
-    ".dsm-menuItem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-    ".dsm-menuLabel{padding:8px 10px 4px;color:var(--dsw-alias-label-secondary);font-size:12px}",
     // —— 弹窗 ——
     ".dsm-overlay{position:fixed;inset:0;z-index:60;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:24px}",
     ".dsm-modal{width:min(680px,100%);max-height:88vh;display:flex;flex-direction:column;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base);box-shadow:0 24px 64px rgba(0,0,0,.32);overflow:hidden}",
@@ -368,8 +356,6 @@
     // 文本按钮：图标按钮是 30px 方形，装不下「取消」这类文字
     ".dsm-btnText{display:inline-flex;align-items:center;justify-content:center;height:30px;padding:0 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;white-space:nowrap;cursor:pointer}",
     ".dsm-btnText:hover{background:var(--dsw-alias-bg-layer-2)}",
-    ".dsm-select{position:relative}",
-    ".dsm-selectBtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;cursor:pointer}",
     // —— 表单 ——
     ".dsm-field{display:flex;flex-direction:column;gap:6px}",
     ".dsm-input{height:34px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:13.5px;outline:none}",
@@ -404,15 +390,12 @@
 
   // plugins/dsh-skills-manager/src/client/icons.js
   var Svg = (props) => h("svg", Object.assign({ width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }, props));
-  var IconMonitor = (p) => h(Svg, p, h("rect", { x: 3, y: 4, width: 18, height: 13, rx: 2 }), h("path", { d: "M8 21h8M12 17v4" }));
   var IconFolder = (p) => h(Svg, p, h("path", { d: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" }));
-  var IconCaret = (p) => h(Svg, Object.assign({ width: 14, height: 14 }, p), h("path", { d: "m6 9 6 6 6-6" }));
   var IconSearch = (p) => h(Svg, p, h("circle", { cx: 11, cy: 11, r: 7 }), h("path", { d: "m20 20-3.2-3.2" }));
   var IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
   var IconArrowUp = (p) => h(Svg, p, h("path", { d: "M12 19V5" }), h("path", { d: "m5 12 7-7 7 7" }));
   var IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
   var IconWarning = (p) => h(Svg, p, h("path", { d: "M12 3 2.5 19.5h19L12 3Z" }), h("path", { d: "M12 10v4" }), h("path", { d: "M12 17.5h.01" }));
-  var IconCheck = (p) => h(Svg, p, h("path", { d: "m5 13 4 4 10-10" }));
   var IconCopy = (p) => h(Svg, p, h("rect", { x: 9, y: 9, width: 11, height: 11, rx: 2 }), h("path", { d: "M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" }));
   var IconSparkle = (p) => h(Svg, p, h("path", { d: "M12 3c1 4 2 5 6 6-4 1-5 2-6 6-1-4-2-5-6-6 4-1 5-2 6-6Z" }), h("path", { d: "M18 15c.5 2 1 2.5 3 3-2 .5-2.5 1-3 3-.5-2-1-2.5-3-3 2-.5 2.5-1 3-3Z" }));
   var IconLayers = (p) => h(Svg, p, h("rect", { x: 4, y: 4, width: 12, height: 12, rx: 2 }), h("path", { d: "M9 20h9a2 2 0 0 0 2-2V9" }));
@@ -429,42 +412,6 @@
         props.onClick(event);
       }
     }, children);
-  }
-  function Dropdown(props) {
-    const { useState, useEffect, useRef } = getReact();
-    const [open, setOpen] = useState(false);
-    const ref = useRef(null);
-    useEffect(() => {
-      if (!open) return void 0;
-      const onDown = (event) => {
-        if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-      };
-      const onKey = (event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          setOpen(false);
-        }
-      };
-      document.addEventListener("mousedown", onDown);
-      document.addEventListener("keydown", onKey);
-      return () => {
-        document.removeEventListener("mousedown", onDown);
-        document.removeEventListener("keydown", onKey);
-      };
-    }, [open]);
-    return h(
-      "div",
-      { className: props.className || "dsm-select", ref },
-      h("button", {
-        type: "button",
-        className: props.buttonClassName || "dsm-selectBtn",
-        onClick: () => setOpen((value) => !value),
-        "aria-haspopup": "menu",
-        "aria-expanded": open ? "true" : "false"
-      }, props.trigger, props.hideCaret ? null : h(IconCaret, null)),
-      open ? h("div", { className: "dsm-menu", role: "menu" }, props.children(open ? () => setOpen(false) : () => {
-      })) : null
-    );
   }
   function Modal(props) {
     const { useEffect, useRef } = getReact();
@@ -911,17 +858,15 @@
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-    const [scope, setScope] = useState({ kind: "global", path: "", title: "" });
+    const [category, setCategory] = useState("all");
     const [detail, setDetail] = useState(null);
     const [notice, setNotice] = useState(null);
     const requestSeq = useRef(0);
-    const cwd = scope.kind === "project" ? scope.path : "";
     const load = useCallback((useRefresh) => {
       const seq = requestSeq.current + 1;
       requestSeq.current = seq;
       setLoading(true);
       const params = {};
-      if (cwd) params.cwd = cwd;
       if (useRefresh) params.refresh = "1";
       apiGet("/state", params).then((payload) => {
         if (seq !== requestSeq.current) return;
@@ -934,13 +879,13 @@
         if (seq !== requestSeq.current) return;
         setLoading(false);
       });
-    }, [cwd]);
+    }, []);
     useEffect(() => {
       load();
     }, [load]);
     const skills = state && state.skills || [];
-    const totals = state && state.totals || { skills: 0, installed: 0 };
     const roots = useMemo(() => state && state.roots || [], [state]);
+    const workspaces = useMemo(() => state && state.workspaces || [], [state]);
     const rootTitle = useMemo(() => {
       const map = /* @__PURE__ */ new Map();
       for (const root of roots) map.set(root.label, root.title);
@@ -954,42 +899,71 @@
       return set;
     }, [roots]);
     const filtered = useMemo(() => filterSkills(skills, search), [skills, search]);
-    const installed = useMemo(
-      () => filtered.filter((skill) => writableSources.has(skill.source) && skill.exists),
-      [filtered, writableSources]
+    const sourceKindOf = useMemo(() => {
+      const map = /* @__PURE__ */ new Map();
+      for (const root of roots) map.set(root.label, root.kind);
+      return map;
+    }, [roots]);
+    const categoryOf = useCallback((skill) => {
+      if (!(writableSources.has(skill.source) && skill.exists)) return "bundled";
+      if (skill.source === "user-dsh") return "global";
+      if (skill.source === "user-agents") return "user";
+      return sourceKindOf.get(skill.source) === "project" ? "workspace" : "bundled";
+    }, [writableSources, sourceKindOf]);
+    const counts = useMemo(() => {
+      const value = { all: filtered.length, global: 0, user: 0, bundled: 0, workspace: 0 };
+      for (const skill of filtered) value[categoryOf(skill)] += 1;
+      return value;
+    }, [filtered, categoryOf]);
+    const selected = useMemo(
+      () => filtered.filter((skill) => category === "all" || categoryOf(skill) === category),
+      [filtered, category, categoryOf]
     );
-    const builtin = useMemo(
-      () => filtered.filter((skill) => !(writableSources.has(skill.source) && skill.exists)),
-      [filtered, writableSources]
-    );
-    const builtinGroups = useMemo(() => {
-      const groups = /* @__PURE__ */ new Map();
-      for (const skill of builtin) {
-        const key = skill.source || "runtime";
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(skill);
+    const workspaceTitleOf = useCallback((skill) => {
+      const rootPath = String(skill.rootPath || "");
+      for (const workspace of workspaces) {
+        if (workspace.path !== "" && rootPath.startsWith(workspace.path)) return workspace.title;
       }
-      return [...groups.entries()];
-    }, [builtin]);
-    const scopeLabel = scope.kind === "project" ? scope.title + " " + tt("scope.localSuffix") : tt("scope.user");
+      return rootTitle.get(skill.source) || skill.source;
+    }, [workspaces, rootTitle]);
+    const workspacePathOf = useCallback((skill) => {
+      const rootPath = String(skill.rootPath || "");
+      for (const workspace of workspaces) {
+        if (workspace.path !== "" && rootPath.startsWith(workspace.path)) return workspace.path;
+      }
+      return "";
+    }, [workspaces]);
+    const groupBySource = category === "all" || category === "workspace";
+    const groups = useMemo(() => {
+      if (!groupBySource) return [];
+      const map = /* @__PURE__ */ new Map();
+      for (const skill of selected) {
+        const cat = categoryOf(skill);
+        const key = cat === "workspace" ? workspaceTitleOf(skill) : tt("badge." + cat);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(skill);
+      }
+      return [...map.entries()];
+    }, [selected, groupBySource, categoryOf, workspaceTitleOf, tt]);
     const openDirectory = async (skill) => {
       setNotice(null);
       try {
-        await apiPost("/reveal", { name: skill.name, cwd });
+        await apiPost("/reveal", { name: skill.name, cwd: workspacePathOf(skill) });
       } catch (err) {
         setNotice(localizeError(err));
       }
     };
-    const renderRow = (skill) => {
+    const renderCard = (skill) => {
       const writable = writableSources.has(skill.source) && skill.exists;
       const issues = Array.isArray(skill.issues) ? skill.issues : [];
       const blocked = issues.length > 0;
       const issueText = issues.map((issue) => tt("issue." + issue, {})).join("\uFF1B");
+      const cardCategory = categoryOf(skill);
       return h(
-        "div",
+        "article",
         {
           key: skill.name,
-          className: "dsm-row",
+          className: "dsm-card",
           role: "button",
           tabIndex: 0,
           onClick: () => setDetail(skill),
@@ -1000,93 +974,84 @@
             }
           }
         },
-        h("div", { className: "dsm-icon" }, writable ? h(IconSparkle, null) : h(IconLayers, null)),
+        // 图标沿用原设计：可写技能四角星、只读技能叠层。
+        h("div", { className: "dsm-cardIcon" }, writable ? h(IconSparkle, null) : h(IconLayers, null)),
         h(
           "div",
-          { className: "dsm-rowMain" },
+          { className: "dsm-cardMain" },
           h(
             "div",
-            { className: "dsm-rowMainTitle" },
-            h("div", { className: "dsm-name", title: skill.name }, skill.name),
+            { className: "dsm-cardTitle" },
+            h("span", { className: "dsm-name", title: skill.name }, skill.name),
             blocked ? h("span", { className: "dsm-badge dsm-badgeWarn", title: tt("list.blockedTitle", { reason: issueText }) }, tt("list.blockedBadge")) : null
           ),
-          h("div", { className: "dsm-desc", title: skill.description }, skill.description || tt("detail.noDescription"))
+          h(
+            "p",
+            { className: "dsm-cardDesc", title: skill.description || void 0 },
+            skill.description || tt("detail.noDescription")
+          )
         ),
-        writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly")),
-        skill.path ? IconButton({ className: "dsm-iconBtnSm", label: "\u6253\u5F00\u76EE\u5F55 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null)) : null
+        h(
+          "div",
+          { className: "dsm-cardFoot" },
+          h("span", { className: "dsm-badge" + (cardCategory === "bundled" ? " dsm-badgeCat" : "") }, tt("badge." + cardCategory)),
+          writable ? null : h("span", { className: "dsm-badge" }, tt("list.readonly"))
+        ),
+        skill.path ? IconButton({ className: "dsm-cardOpen", label: "\u6253\u5F00\u76EE\u5F55 " + skill.name, onClick: () => openDirectory(skill) }, h(IconFolder, null)) : null
       );
     };
     return h(
       "div",
       { className: "dsm-root" },
-      h("h1", { className: "dsm-title" }, tt("section.title")),
       h(
         "div",
-        { className: "dsm-toolbar" },
+        { className: "dsm-head" },
+        h("h1", { className: "dsm-title" }, tt("section.title")),
         h(
           "div",
-          { className: "dsm-toolbarLeft" },
-          h(Dropdown, {
-            className: "dsm-scope",
-            buttonClassName: "dsm-scopeBtn",
-            trigger: h(
-              "span",
-              { style: { display: "inline-flex", alignItems: "center", gap: "8px" } },
-              scope.kind === "project" ? h(IconFolder, null) : h(IconMonitor, null),
-              h("span", null, scopeLabel)
-            ),
-            children: (close) => [
-              h("button", {
-                key: "global",
-                type: "button",
-                className: "dsm-menuItem",
-                onClick: () => {
-                  setScope({ kind: "global", path: "", title: "" });
-                  close();
-                }
-              }, h(IconMonitor, null), h("span", null, tt("scope.user")), scope.kind === "global" ? h(IconCheck, null) : null),
-              h("div", { key: "label", className: "dsm-menuLabel" }, tt("scope.group.workspaces")),
-              (state && state.workspaces || []).map((workspace) => h("button", {
-                key: workspace.id,
-                type: "button",
-                className: "dsm-menuItem",
-                onClick: () => {
-                  setScope({ kind: "project", path: workspace.path, title: workspace.title });
-                  close();
-                }
-              }, h(IconFolder, null), h("span", null, workspace.title + " " + tt("scope.localSuffix")), scope.path === workspace.path ? h(IconCheck, null) : null))
-            ]
-          }),
-          h("div", { className: "dsm-divider" }),
-          h("div", { className: "dsm-meta" }, tt("toolbar.count", { n: totals.skills || 0 }))
-        ),
-        h(
-          "div",
-          { className: "dsm-searchWrap" },
-          h(IconSearch, { className: "dsm-searchIcon" }),
-          h("input", {
-            className: "dsm-search",
-            value: search,
-            placeholder: tt("toolbar.search"),
-            onChange: (event) => setSearch(event.target.value)
-          }),
-          search ? h("button", {
-            type: "button",
-            className: "dsm-searchClear",
-            "aria-label": tt("toolbar.clearSearch"),
-            title: tt("toolbar.clearSearch"),
-            onClick: () => setSearch("")
-          }, h(IconClose, null)) : null
+          { className: "dsm-headActions" },
+          h(
+            "div",
+            { className: "dsm-searchWrap" },
+            h(IconSearch, { className: "dsm-searchIcon" }),
+            h("input", {
+              className: "dsm-search",
+              value: search,
+              placeholder: tt("toolbar.search"),
+              onChange: (event) => setSearch(event.target.value)
+            }),
+            search ? h("button", {
+              type: "button",
+              className: "dsm-searchClear",
+              "aria-label": tt("toolbar.clearSearch"),
+              title: tt("toolbar.clearSearch"),
+              onClick: () => setSearch("")
+            }, h(IconClose, null)) : null
+          ),
+          IconButton({ className: "dsm-iconBtn", label: tt("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null))
         )
       ),
+      // 来源筛选：分类与数量都在这一行，内容随选择切换；不再有作用域下拉。
       h(
         "div",
-        { className: "dsm-sectionHead" },
-        h("div", { className: "dsm-sectionTitle" }, tt("section.installed"), h("span", { className: "dsm-sectionCount" }, String(installed.length))),
+        { className: "dsm-filterRow" },
         h(
           "div",
-          { className: "dsm-actions" },
-          IconButton({ className: "dsm-iconBtn", label: tt("action.refresh"), onClick: () => load(true) }, h(IconRefresh, null))
+          { className: "dsm-chips", role: "group" },
+          [
+            { key: "all", label: tt("filter.all"), count: counts.all },
+            { key: "global", label: tt("filter.global"), count: counts.global },
+            { key: "user", label: tt("filter.user"), count: counts.user },
+            { key: "bundled", label: tt("filter.bundled"), count: counts.bundled },
+            { key: "workspace", label: tt("filter.workspace"), count: counts.workspace }
+          ].map((item) => h("button", {
+            key: item.key,
+            type: "button",
+            className: "dsm-chip",
+            "data-on": String(category === item.key),
+            "aria-pressed": String(category === item.key),
+            onClick: () => setCategory(item.key)
+          }, item.label + " " + item.count))
         )
       ),
       notice ? h("div", { className: "dsm-error" }, notice) : null,
@@ -1102,24 +1067,13 @@
           { style: { marginTop: "10px" } },
           h("button", { type: "button", className: "dsm-primary", onClick: load }, h("span", null, "\u91CD\u8BD5"))
         )
-      ) : installed.length === 0 && builtin.length === 0 ? h("div", { className: "dsm-state" }, tt("state.empty")) : null,
-      installed.length > 0 ? h("div", { className: "dsm-list" }, installed.map(renderRow)) : null,
-      builtinGroups.length > 0 ? h(
+      ) : !state ? null : selected.length === 0 ? h("div", { className: "dsm-state" }, tt("state.empty")) : groupBySource ? groups.map(([name, items]) => h(
         "div",
-        null,
-        h(
-          "div",
-          { className: "dsm-sectionHead" },
-          h("div", { className: "dsm-sectionTitle" }, tt("section.builtin"), h("span", { className: "dsm-sectionCount" }, String(builtin.length)))
-        ),
-        builtinGroups.map(([source, group]) => h(
-          "div",
-          { key: source },
-          h("div", { className: "dsm-groupTitle" }, rootTitleOf(source) + " \xB7 " + group.length),
-          h("div", { className: "dsm-list" }, group.map(renderRow))
-        ))
-      ) : null,
-      detail ? h(DetailModal, { t: tt, skill: detail, cwd, onClose: () => setDetail(null) }) : null
+        { key: name, className: "dsm-group" },
+        h("div", { className: "dsm-groupTitle" }, name + " \xB7 " + items.length),
+        h("div", { className: "dsm-list" }, items.map(renderCard))
+      )) : h("div", { className: "dsm-list" }, selected.map(renderCard)),
+      detail ? h(DetailModal, { t: tt, skill: detail, cwd: "", onClose: () => setDetail(null) }) : null
     );
   }
   function apply(ctx) {

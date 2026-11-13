@@ -1,7 +1,6 @@
-/** 通用小组件：图标按钮、下拉菜单、弹窗。 */
+/** 通用小组件：图标按钮、弹窗。 */
 
 import { h, getReact } from "./runtime.js";
-import { IconCaret } from "./icons.js";
 import { t } from "./i18n.js";
 
 export function IconButton(props, children) {
@@ -12,40 +11,6 @@ export function IconButton(props, children) {
     title: props.title || props.label,
     onClick: (event) => { event.stopPropagation(); props.onClick(event); },
   }, children);
-}
-
-export function Dropdown(props) {
-  const { useState, useEffect, useRef } = getReact();
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
-    };
-    const onKey = (event) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  return h("div", { className: props.className || "dsm-select", ref: ref },
-    h("button", {
-      type: "button",
-      className: props.buttonClassName || "dsm-selectBtn",
-      onClick: () => setOpen((value) => !value),
-      "aria-haspopup": "menu",
-      "aria-expanded": open ? "true" : "false",
-    }, props.trigger, props.hideCaret ? null : h(IconCaret, null)),
-    open ? h("div", { className: "dsm-menu", role: "menu" }, props.children(open ? () => setOpen(false) : () => {})) : null,
-  );
 }
 
 export function Modal(props) {
