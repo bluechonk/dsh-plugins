@@ -28,11 +28,11 @@
 			"versions": [
 				{
 					"version": "0.1.2",
-					"publishTimestamp": 1794557722,
+					"publishTimestamp": 1794558100,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
+						"commit": "46d6ae0891b969a85a47a4d8c24f8d5f22f735e5",
 						"path": "plugins/dsh-skills-manager"
 					}
 				}
@@ -57,11 +57,11 @@
 			"versions": [
 				{
 					"version": "0.1.1",
-					"publishTimestamp": 1794557722,
+					"publishTimestamp": 1794558100,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
+						"commit": "46d6ae0891b969a85a47a4d8c24f8d5f22f735e5",
 						"path": "plugins/dsh-usage-stats"
 					}
 				}
@@ -86,11 +86,11 @@
 			"versions": [
 				{
 					"version": "0.1.0",
-					"publishTimestamp": 1794557722,
+					"publishTimestamp": 1794558100,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
+						"commit": "46d6ae0891b969a85a47a4d8c24f8d5f22f735e5",
 						"path": "plugins/dsh-visualize"
 					}
 				}
