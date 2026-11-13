@@ -6,11 +6,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 
 界面跟随宿主语言设置：在「设置 → 通用设置 → 语言」里切换，**不用刷新页面**，本面板所有文案（标题、按钮、提示、报错）立刻跟着变。实现走宿主官方 i18n 机制 `@deepseek-ai/dsh-client-locale`：`ctx.locale.register` 注册字典 + 组件注册项声明 `locale` 命名空间，宿主注入的 `t` 引用随语言切换而变。
 
-![侧边栏技能面板](docs/images/01-sidebar-skills-panel.png)
-
-点开导航行后是完整面板（作用域切换、搜索、详情弹窗）：
-
-![技能主面板](docs/images/10-skills-main-panel.png)
+![技能面板：作用域切换、搜索、已安装列表与打开目录](docs/images/skills-panel.png)
 
 ## 插件标识
 
@@ -40,29 +36,7 @@ DeepSeek Harness 插件：在**侧边栏**新增「技能」独立面板（与�
 | 详情弹窗 | 标题 +「Skill」徽章；描述（frontmatter 的 `description`，Markdown 渲染）；**文件内容**（SKILL.md 正文，Markdown 渲染的滚动卡片，形态对齐 Codex 技能页）；范围（个人 / 项目名 / 内置）、文件路径（行内等宽路径 + 复制图标） |
 | 翻译 | 标题栏一个 `[原文 | 译文]` 分段按钮，**默认原文**，每次打开详情都从原文开始（不持久化）。切到「译文」才翻译**描述与正文**（技能名是标识符，不翻译），Markdown 结构与代码块保留。长文本分块后并发翻译（并发上限 3），**译好一块立即替换该块**，不必等全部完成。结果**落盘缓存**（`~/.dsh/profiles/<profile>/skills-manager-translation-cache.json`），下次打开直接命中、不再请求；选中「译文」时标题栏出现「重新翻译」按钮，点击会绕过缓存重译并覆盖旧缓存。复用宿主的 `translator` 服务（与「思考过程机器翻译」同一套 Bing/Google 通道）；翻译中或失败时在正文上方给一条浅底提示（带图标，文案精简），未启用 `dsh-experimental-cot-translation-bundle` 时提示「翻译服务未启用」并退回原文 |
 
-![技能详情弹窗](docs/images/02-skill-detail-dialog.png)
-
-翻译后的详情弹窗（描述与正文均为中文，可切回原文）：
-
-![技能详情翻译](docs/images/11-skill-detail-translation.png)
-
-作用域下拉：
-
-![作用域下拉](docs/images/05-scope-dropdown.png)
-
-浅色主题（同一套布局，深浅两版都已核对）：
-
-![浅色主题](docs/images/06-light-theme.png)
-
-英文界面（DSH 切成英文时自动跟随）：
-
-![英文界面](docs/images/07-english-ui.png)
-
-![英文详情弹窗](docs/images/08-english-detail-dialog.png)
-
-切回中文（同一页面，无需刷新）：
-
-![切回中文](docs/images/09-back-to-chinese.png)
+![技能详情弹窗：描述、文件内容、范围与路径](docs/images/skill-detail-dialog.png)
 
 ## 设计基准
 

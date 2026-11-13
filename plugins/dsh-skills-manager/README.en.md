@@ -4,13 +4,9 @@
 
 A DeepSeek Harness plugin that adds a **Skills** panel to the sidebar, alongside **Plugins**, **Automations** and **Usage**, so every skill the Harness has actually loaded can be inspected and managed in one place — the global `~/.dsh/skills` and `~/.agents/skills` roots, plus project and workspace roots.
 
-![Skills panel in the sidebar](docs/images/01-sidebar-skills-panel.png)
-
-Clicking the row opens the full panel (scope switching, search, detail dialog):
-
-![Skills panel](docs/images/10-skills-main-panel.png)
-
 The plugin UI follows the host's language setting: switch it under "Settings → General → Language" and **no page reload is needed** — every label, button and message in this panel switches immediately. The implementation uses the host's official i18n mechanism (`@deepseek-ai/dsh-client-locale`): the dictionary is registered with `ctx.locale.register` and the component registration declares its `locale` namespace, so the `t` reference the host injects changes with the language.
+
+![Skills panel: scope switching, search, installed list and open-folder](docs/images/skills-panel.png)
 
 ## Plugin identity
 
@@ -38,29 +34,7 @@ Package name, loader row id and client module id all use the `@bluechonk` scope;
 | Detail dialog | Title + a "Skill" badge; description (the frontmatter `description`, rendered as Markdown); **file content** (the SKILL.md body, rendered as Markdown in a scrollable card, matching the Codex skill page); scope (Personal / project name / Built-in) and the file path (inline monospace path + copy icon) |
 | Translation | A `[Original | Translated]` segmented control in the title bar, **off by default**; every detail open starts on the original (nothing is persisted). Switching to "Translated" translates the **description and body** (the skill name is an identifier and is never translated), keeping Markdown structure and code blocks. It reuses the host's `translator` service (the same Bing/Google channel as the reasoning translation). Long text is split into chunks and translated concurrently (up to 3 at a time); **each finished chunk replaces its original text immediately** instead of waiting for the whole field. Results are **cached on disk** (`~/.dsh/profiles/<profile>/skills-manager-translation-cache.json`), so the next open hits the cache without requesting; while "Translated" is selected a "Retranslate" button appears in the title bar, which bypasses the cache, re-requests and overwrites the old cache. While translating or on failure a tinted bar with an icon appears above the body (kept short), and when `dsh-experimental-cot-translation-bundle` is not enabled it says "Translation service not enabled" and falls back to the original text |
 
-![Skill detail dialog](docs/images/02-skill-detail-dialog.png)
-
-The same dialog translated (description and body in Chinese, switchable back to the original):
-
-![Translated skill detail](docs/images/11-skill-detail-translation.png)
-
-Scope dropdown:
-
-![Scope dropdown](docs/images/05-scope-dropdown.png)
-
-Light theme (same layout, both themes checked):
-
-![Light theme](docs/images/06-light-theme.png)
-
-English UI (the plugin follows the Harness language automatically):
-
-![English UI](docs/images/07-english-ui.png)
-
-![English detail dialog](docs/images/08-english-detail-dialog.png)
-
-Back to Chinese (same page, no reload):
-
-![Back to Chinese](docs/images/09-back-to-chinese.png)
+![Skill detail dialog: description, file content, scope and path](docs/images/skill-detail-dialog.png)
 
 ## Design baseline
 

@@ -273,7 +273,6 @@ showTranslated = translateOn && !showOriginal && !translating && !translateError
 | 隔离实例实机 | `web` profile + patch 注入 translator / cot-translation / 本插件，1440×900 |
 | 翻译效果 | 英文技能的描述与正文均译为中文，`name` 保持英文，Markdown 结构保留 |
 | 对照开关 | 「看原文」切回英文，链接变「看译文」；标题栏「翻译」按钮可整体关闭 |
-| 截图 | [docs/images/11-skill-detail-translation.png](images/11-skill-detail-translation.png) |
 
 未复验：`translator-unavailable` 的降级路径需要在**未启用**该 bundle 的 profile 里跑，
 验证实例显式注入了该 bundle。
