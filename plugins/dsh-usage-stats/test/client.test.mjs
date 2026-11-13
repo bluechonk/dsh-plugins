@@ -48,9 +48,9 @@ const PURE_KEYS = [
   "donutRowsOf", "donutArcPath", "validOf",
   // v0.2.0 增量（SPEC §6）
   "phaseAfterTick", "summaryCellsOf", "tipPlacementOf", "tipRowsOf", "hiddenModelRowsOf",
-  "pctTextOf", "donutTipTextOf", "needHeatmapRefreshOf", "cursorStepOf", "backfillUiOf",
+  "pctTextOf", "donutTipTextOf", "modelLabelOf", "needHeatmapRefreshOf", "cursorStepOf", "backfillUiOf",
 ];
-test("__pure 导出面快照（36 个纯函数、冻结）", { timeout: 5000 }, () => {
+test("__pure 导出面快照（37 个纯函数、冻结）", { timeout: 5000 }, () => {
   assert.deepEqual(Object.keys(P).sort(), [...PURE_KEYS].sort());
   assert.ok(Object.isFrozen(P));
 });
@@ -370,6 +370,17 @@ test("donutRowsOf：只读 models 响应——模型用量恒为全期口径，�
   const out = P.donutRowsOf({ models: [{ key: "x/a", tokens: 130 }, { key: "x/b", tokens: 50 }] });
   assert.deepEqual(out.rows.map((r) => [r.key, r.tokens]), [["x/a", 130], ["x/b", 50]]);
   assert.equal(out.total, 180);
+});
+
+test("modelLabelOf：剥掉第一段提供商前缀，无斜杠/畸形键原样返回", () => {
+  assert.equal(P.modelLabelOf("commandcode/minimax/minimax-m3.1-flash:free"), "minimax/minimax-m3.1-flash:free");
+  assert.equal(P.modelLabelOf("longcat/LongCat-2.5"), "LongCat-2.5");
+  assert.equal(P.modelLabelOf("modelmux/deepseek-v4.1-flash"), "deepseek-v4.1-flash");
+  assert.equal(P.modelLabelOf("其他模型"), "其他模型", "无斜杠（归并行）原样返回");
+  assert.equal(P.modelLabelOf("/leading"), "/leading", "前导斜杠没有可剥的前缀");
+  assert.equal(P.modelLabelOf("trailing/"), "trailing/", "剥完为空时原样返回");
+  assert.equal(P.modelLabelOf(""), "");
+  assert.equal(P.modelLabelOf(null), "");
 });
 
 test("donutArcPath：整圆/零角度/>360° 都不产出非法路径（无 NaN/Infinity，M…Z 结构完整）", { timeout: 5000 }, () => {
@@ -1063,7 +1074,8 @@ test("渲染冒烟：环图数据含 null 元素不炸（脏数据防护）", { 
   assert.ok(collect(tree).length > 0);
   // 行为断言：坏元素被跳过，只剩一个模型
   const all = texts(tree).join("|");
-  assert.ok(all.includes("p/m1"), "合法模型应渲染出来");
+  assert.ok(all.includes("m1"), "合法模型应渲染出来");
+  assert.ok(!all.includes("p/m1"), "图例模型名不应再带提供商前缀");
   assert.ok(!all.includes("null"), "null 元素不应进入渲染结果");
 });
 
@@ -1113,6 +1125,11 @@ test("渲染冒烟：模型用量右侧列表无悬停文本，环扇区仍保�
   const nodes = collect(tree);
   const rows = nodes.filter((n) => n.props?.className === "dus-mrow");
   assert.equal(rows.length, 3, "应渲染 3 个模型行");
+  assert.deepEqual(
+    nodes.filter((n) => n.props?.className === "dus-mnm").map((n) => texts(n).join("")),
+    ["m1", "m2", "m3"],
+    "图例模型名应剥掉第一段提供商前缀",
+  );
   for (const row of rows) {
     assert.equal(row.props.title, undefined, "模型行不应带原生 title（浏览器悬停文本框）");
     assert.equal(row.props.onMouseEnter, undefined, "模型行不应再触发悬停卡片");

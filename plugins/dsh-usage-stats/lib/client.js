@@ -27,8 +27,9 @@
 //      「时间范围」只作用于趋势折线。换档不重拉 models（全期与 range 无关）。
 //   ③ 图表 tooltip/图例 token 数用万/亿短格式（SPEC §6）；摘要条同口径，
 //      精确千分位只出现在元素的 title 悬停说明里。
-//   ④ 模型显示名用SPEC主键 provider/model 全串（models 路由的 key）——不同供应商
-//      同名模型会撞色撞名，全串无歧义。
+//   ④ 模型键用 SPEC 主键 provider/model（models 路由的 key）——不同供应商同名模型会
+//      撞色撞名，全串无歧义；模型用量环图例与扇区悬停卡片再剥掉第一段提供商前缀
+//      （modelLabelOf），趋势图图例保留全串。
 //   ⑤ 趋势折线最多画用量最高的 6 个模型（图例/折线/悬停行共用同一份清单），
 //      不做「其他模型」归并（归并是环形图的明文要求）；被截掉的模型数在悬停卡片里按
 //      「悬停日当天」注明（区间级会天天显示同一个数）。
@@ -1021,6 +1022,17 @@ window.__ModuleLoader__.load({
       return fmtCompact(tokens, true, t) + " Token · " + pctTextOf(tokens, total);
     }
 
+    /** 模型显示名：剥掉键里第一段提供商前缀（模型用量环图例用，provider 名只是路由标识）。
+     *  无斜杠（如「其他模型」）、前导斜杠、剥完为空都原样返回。 */
+    function modelLabelOf(key) {
+      const text = typeof key === "string" ? key : "";
+      if (text === "") return text;
+      const slash = text.indexOf("/");
+      if (slash <= 0) return text;
+      const rest = text.slice(slash + 1);
+      return rest === "" ? text : rest;
+    }
+
     /** 静默拍要不要补拉热力图（§6）：只在总量或「今天」变了才拉。
      *  回应「历史日档每次请求都要同步读盘」的真实成本——空闲时零额外请求。 */
     function needHeatmapRefreshOf(prev, next) {
@@ -1563,7 +1575,7 @@ window.__ModuleLoader__.load({
         if (hit !== undefined) {
           // 标题 + 1 行（token + 占比）：按实际行数估算高度
           const pos = tipPlacementOf(tip.x, tip.y, tip.cw, tip.ch, TIP_W, tipHeightOf(1));
-          tipProps = { left: pos.left, top: pos.top, title: hit.key, lines: [donutTipTextOf(hit, data.total, props.t)] };
+          tipProps = { left: pos.left, top: pos.top, title: modelLabelOf(hit.key), lines: [donutTipTextOf(hit, data.total, props.t)] };
         }
       }
       const top = data.rows[0];
@@ -1605,7 +1617,7 @@ window.__ModuleLoader__.load({
             },
               el("div", { className: "dus-mrowTop" },
                 el("span", { className: "dus-msw", style: { background: it.color } }),
-                el("span", { className: "dus-mnm" }, it.key),
+                el("span", { className: "dus-mnm" }, modelLabelOf(it.key)),
                 el("span", { className: "dus-mpc" }, pctTextOf(it.tokens, data.total)),
               ),
               el("div", { className: "dus-mrowSub" }, fmtCompact(it.tokens, true, props.t) + " tokens"),
@@ -2235,6 +2247,7 @@ window.__ModuleLoader__.load({
       hiddenModelRowsOf,
       pctTextOf,
       donutTipTextOf,
+      modelLabelOf,
       needHeatmapRefreshOf,
       cursorStepOf,
       backfillUiOf,
