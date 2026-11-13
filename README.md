@@ -23,10 +23,12 @@ market-index.json              插件市场索引（format 1，由脚本生成�
 plugins/
   dsh-skills-manager/          侧边栏「技能」面板：管理全局/用户/工作区各级 skills
   dsh-usage-stats/             使用统计面板：模型用量、token、费用
+  dsh-viz/                     对话内可视化：模型写的 HTML 页面以沙箱 iframe 渲染
 scripts/
   sync-index.mjs               从 plugins/ 生成 market-index.json
   check-all.mjs                逐个跑各插件的语法检查
   test-all.mjs                 逐个跑各插件的单测
+  build-client.mjs             把所有 src/client/ 打包成各自的 client/client.js
 .githooks/pre-push             本地推送前门禁（与 CI 等价）
 ```
 
@@ -80,6 +82,10 @@ npm run hooks:install  # 启用 .githooks（每个 clone 执行一次）
 - 早期版本源自 [Make0209/dsh-usage-stats](https://github.com/Make0209/dsh-usage-stats)（MIT），本插件重做了看板（`lib/client.js` 仅约 38% 相同）。
 - 界面形态参考 [zai-org/ZCode](https://github.com/zai-org/ZCode)（Apache-2.0）的「使用统计」面板设计，配色取其 CSS 变量真值，不含其代码。
 - 采集与折叠语义对齐官方 `@deepseek-ai/dsh-token-meter` 的 `tokenUsage` 投影，不含其代码。
+
+**dsh-viz**
+
+- 「遮蔽 `assistant-step` 聊天节点以拦截自定义围栏」的思路来自社区插件 [dsh-genui](https://github.com/omdsh-dev/dsh-genui)（MIT）：同一宿主扩展点（`conversation.chat.node` 的 keyed / session 槽）与官方条目捕获方式。围栏语法、渲染策略与全部代码为独立实现。
 
 ## 许可证
 
