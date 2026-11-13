@@ -4,7 +4,7 @@ import { h, getReact } from "./runtime.js";
 import { apiGet, apiPost } from "./api.js";
 import { t, tr, setT, fallbackT, filterSkills, rootTitleOf, localizeError, LOCALE_NS, LOCALE_DICT } from "./i18n.js";
 import { ensureStyles } from "./styles.js";
-import { IconMonitor, IconFolder, IconSearch, IconClose, IconRefresh, IconSparkle, IconLayers, IconCheck, IconCaret } from "./icons.js";
+import { IconMonitor, IconFolder, IconSearch, IconClose, IconRefresh, IconArrowUp, IconSparkle, IconLayers, IconCheck, IconCaret } from "./icons.js";
 import { Dropdown, IconButton } from "./components.js";
 import { DetailModal } from "./detail.js";
 import { parseInline, parseMarkdown, mergeChunks, translationChunks, localeDict } from "./pure.js";
@@ -13,6 +13,9 @@ export const PANEL_ID = "skills-manager";
 export const PANEL_ORDER = 30;
 
 const WRITABLE_ROOT_KINDS = new Set(["global", "project", "custom"]);
+
+/** 滚动超过这个距离才出现「回到顶部」——一进来就常驻会挡住列表右下角。 */
+const BACK_TOP_THRESHOLD = 240;
 
 /** 侧边栏导航行图标：装饰性 16px 线性图标，尺寸由宿主按展开/收起给 16/18。 */
 function PanelIcon(props) {
@@ -32,10 +35,28 @@ function PanelIcon(props) {
 
 /** 页面骨架：主面板铺满内容列，滚动交给内层，内容列限宽居中。 */
 function PanelPage(props) {
+  const { useState, useRef } = getReact();
+  const tt = props.t || fallbackT();
+  const [showBackTop, setShowBackTop] = useState(false);
+  const scrollRef = useRef(null);
   return h("div", { className: "dsm-page" },
-    h("div", { className: "dsm-pageScroll" },
+    h("div", {
+      className: "dsm-pageScroll",
+      ref: scrollRef,
+      onScroll: (event) => setShowBackTop(event.currentTarget.scrollTop > BACK_TOP_THRESHOLD),
+    },
       h("div", { className: "dsm-pageContent" }, h(Panel, props)),
     ),
+    showBackTop
+      ? IconButton({
+        className: "dsm-backTop",
+        label: tt("action.backToTop"),
+        onClick: () => {
+          const el = scrollRef.current;
+          if (el && typeof el.scrollTo === "function") el.scrollTo({ top: 0, behavior: "smooth" });
+        },
+      }, h(IconArrowUp, null))
+      : null,
   );
 }
 

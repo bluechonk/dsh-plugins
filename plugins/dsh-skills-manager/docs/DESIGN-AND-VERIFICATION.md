@@ -414,3 +414,11 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 - 顺带清掉因此失去调用方的 `loadRef`（原为写后刷新保留的最新加载器引用）与 `roots.js` 的 `isManagedRoot()`（原为删除把守受管根）。
 
 验证：`npm run check` 16 个文件通过，`npm test` 59 项全绿，`npm run index:check` 通过。
+
+## 十七、回到顶部按钮（2026-11-13）
+
+- `PanelPage` 自持滚动容器（`.dsm-pageScroll`），给它挂 `onScroll` 与 ref：`scrollTop > 240` 时出现浮动按钮，点击 `scrollTo({ top: 0, behavior: "smooth" })`。阈值取 240 是让标题与工具条先滚出视野，一进来就常驻会挡住列表右下角。
+- 按钮为 36px 圆形（`dsm-backTop`），绝对定位在 `.dsm-page`（补 `position: relative`）右下角；文案走字典 `action.backToTop`（中文「回到顶部」/ 英文「Back to top」）。
+- 新增图标 `IconArrowUp`。
+
+验证：`npm run check` 16 个文件通过，`npm test` 59 项全绿；另跑 `.tmp/verify-back-to-top.mjs` 物化 client 产物、用最小 React 桩渲染 `PanelPage`，断言「初始不出现 → 滚动超阈值出现 → 点击平滑回顶 → 回到顶部后消失」共 5 项，全绿。

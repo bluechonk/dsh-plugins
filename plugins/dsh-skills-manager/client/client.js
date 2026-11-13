@@ -28,6 +28,7 @@
       "scope.builtin": "\u5185\u7F6E",
       "scope.workspace": "\u5DE5\u4F5C\u533A",
       "action.refresh": "\u5237\u65B0",
+      "action.backToTop": "\u56DE\u5230\u9876\u90E8",
       "action.retry": "\u91CD\u8BD5",
       "action.close": "\u5173\u95ED",
       "action.copyPath": "\u590D\u5236\u8DEF\u5F84",
@@ -105,6 +106,7 @@
       "scope.builtin": "Built-in",
       "scope.workspace": "Workspace",
       "action.refresh": "Refresh",
+      "action.backToTop": "Back to top",
       "action.retry": "Retry",
       "action.close": "Close",
       "action.copyPath": "Copy path",
@@ -273,7 +275,7 @@
   var CSS = [
     // —— 主面板页骨架 ——
     // main 槽位不给页头、内边距与滚动，页面自持（与官方「自动化任务」页一致）。
-    ".dsm-page{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-base,transparent)}",
+    ".dsm-page{position:relative;display:flex;flex-direction:column;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-base,transparent)}",
     ".dsm-pageScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}",
     ".dsm-pageContent{max-width:960px;margin:0 auto;padding:28px clamp(24px,4vw,48px) 0}",
     "[data-platform=darwin] .dsm-pageContent{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}",
@@ -303,6 +305,9 @@
     ".dsm-actions{display:flex;align-items:center;gap:8px}",
     ".dsm-iconBtn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
     ".dsm-iconBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
+    // 回到顶部：浮动在面板右下角，只在滚过标题与工具条后出现
+    ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+    ".dsm-backTop:hover{background:var(--dsw-alias-bg-layer-2)}",
     ".dsm-primary{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px 0 6px;border-radius:8px;border:1px solid transparent;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
     ".dsm-primary:disabled{opacity:.5;cursor:not-allowed}",
     // —— 列表 ——
@@ -404,6 +409,7 @@
   var IconCaret = (p) => h(Svg, Object.assign({ width: 14, height: 14 }, p), h("path", { d: "m6 9 6 6 6-6" }));
   var IconSearch = (p) => h(Svg, p, h("circle", { cx: 11, cy: 11, r: 7 }), h("path", { d: "m20 20-3.2-3.2" }));
   var IconRefresh = (p) => h(Svg, p, h("path", { d: "M20 11a8 8 0 1 0-2.3 5.7" }), h("path", { d: "M20 4v7h-7" }));
+  var IconArrowUp = (p) => h(Svg, p, h("path", { d: "M12 19V5" }), h("path", { d: "m5 12 7-7 7 7" }));
   var IconClose = (p) => h(Svg, p, h("path", { d: "m6 6 12 12M18 6 6 18" }));
   var IconWarning = (p) => h(Svg, p, h("path", { d: "M12 3 2.5 19.5h19L12 3Z" }), h("path", { d: "M12 10v4" }), h("path", { d: "M12 17.5h.01" }));
   var IconCheck = (p) => h(Svg, p, h("path", { d: "m5 13 4 4 10-10" }));
@@ -848,6 +854,7 @@
   var PANEL_ID = "skills-manager";
   var PANEL_ORDER = 30;
   var WRITABLE_ROOT_KINDS = /* @__PURE__ */ new Set(["global", "project", "custom"]);
+  var BACK_TOP_THRESHOLD = 240;
   function PanelIcon(props) {
     const size = typeof props.size === "number" && props.size > 0 ? props.size : 16;
     return h(
@@ -871,14 +878,30 @@
     );
   }
   function PanelPage(props) {
+    const { useState, useRef } = getReact();
+    const tt = props.t || fallbackT();
+    const [showBackTop, setShowBackTop] = useState(false);
+    const scrollRef = useRef(null);
     return h(
       "div",
       { className: "dsm-page" },
       h(
         "div",
-        { className: "dsm-pageScroll" },
+        {
+          className: "dsm-pageScroll",
+          ref: scrollRef,
+          onScroll: (event) => setShowBackTop(event.currentTarget.scrollTop > BACK_TOP_THRESHOLD)
+        },
         h("div", { className: "dsm-pageContent" }, h(Panel, props))
-      )
+      ),
+      showBackTop ? IconButton({
+        className: "dsm-backTop",
+        label: tt("action.backToTop"),
+        onClick: () => {
+          const el = scrollRef.current;
+          if (el && typeof el.scrollTo === "function") el.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }, h(IconArrowUp, null)) : null
     );
   }
   function Panel(props) {
