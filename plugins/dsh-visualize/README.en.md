@@ -47,11 +47,11 @@ Multiple fences in one reply render in order.
 
 ## Skill
 
-The package ships `skills/viz/SKILL.md`. DSH discovers skills from skill roots only, so copy it into one:
+The package ships `skills/visualize/SKILL.md`. DSH discovers skills from skill roots only, so copy it into one:
 
 ```bash
 mkdir -p ~/.dsh/skills
-cp -r plugins/dsh-visualize/skills/viz ~/.dsh/skills/viz
+cp -r plugins/dsh-visualize/skills/visualize ~/.dsh/skills/visualize
 ```
 
 ## Development

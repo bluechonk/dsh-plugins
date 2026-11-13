@@ -24,14 +24,20 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const CHECK_ONLY = process.argv.includes("--check");
 const SHOW_PUSH = process.argv.includes("--push");
 const REPO_URL = "https://github.com/bluechonk/dsh-plugins.git";
-const PLUGIN_DIRS = ["dsh-skills-manager", "dsh-usage-stats"];
+// 插件目录自动发现：新增插件不用再改这里（与 check-all / test-all 同一手法）。
+// 只收带 package.json 的目录，顺序稳定（按名字排序），生成的索引才可复现。
+const PLUGINS_DIR = join(ROOT, "plugins");
+const PLUGIN_DIRS = readdirSync(PLUGINS_DIR, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join(PLUGINS_DIR, entry.name, "package.json")))
+  .map((entry) => entry.name)
+  .sort();
 
 function git(args, options = {}) {
   try {
@@ -98,9 +104,10 @@ function summaryFromReadme(dir, limit) {
 const TITLES = {
   "dsh-skills-manager": { en: "Skills Manager", zh: "技能管理器" },
   "dsh-usage-stats": { en: "Usage Stats", zh: "使用统计" },
+  "dsh-visualize": { en: "Visualize", zh: "对话内可视化" },
 };
 
-const pluginsDir = join(ROOT, "plugins");
+const pluginsDir = PLUGINS_DIR;
 const outPath = join(ROOT, "market-index.json");
 
 /**
@@ -255,8 +262,8 @@ const index = {
   format: 1,
   title: { en: "bluechonk DSH plugins", zh: "bluechonk DSH 插件" },
   description: {
-    en: "Plugins for DeepSeek Harness: skills management and usage statistics.",
-    zh: "DeepSeek Harness 插件：技能管理与使用统计。",
+    en: "Plugins for DeepSeek Harness: skills management, usage statistics and in-conversation visualizations.",
+    zh: "DeepSeek Harness 插件：技能管理、使用统计与对话内可视化。",
   },
   plugins: entries,
 };

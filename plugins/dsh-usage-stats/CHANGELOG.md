@@ -6,7 +6,9 @@
 
 **版本策略**：自用插件，走 `0.1.x` 迭代——接口与数据结构未稳定，不做兼容性承诺；`0.2.0` 留给不兼容的界面改版。不发布到 npm，只经 dsh-plugins 的插件市场索引安装。**没有明确要求不发版**：日常改代码既不 bump 版本号也不打 tag，未发布的改动先攒在本文件顶部的「未发布」段；**发版 = 在 dsh-plugins 走 PR 合入并 bump 版本号**（版本以 `package.json` 与本文件为准）。
 
-## 未发布
+## 0.1.1
+
+模型用量图例剥掉提供商前缀。
 
 - **模型用量图例剥掉提供商前缀**：右侧模型列表与扇区悬停卡片的模型名去掉键的第一段（`commandcode/minimax/minimax-m3.1-flash:free` → `minimax/minimax-m3.1-flash:free`）——provider 只是路由标识，不该占掉图例宽度。趋势图图例保留全串，数据键不变。
 
@@ -52,7 +54,7 @@
 
 ### 验证
 
-- `npm test`：`node --test`，覆盖 `__pure` 纯函数直测面、组件渲染冒烟与端到端，167 项。
+- `npm test`：`node --test`，覆盖 `__pure` 纯函数直测面、组件渲染冒烟与端到端，168 项。
 - `npm run verify:e2e`：真实会话日志跑一遍回填，校验四条 API 的响应形状。
 - `npm run verify:ui` / `scripts/verify-dsh-web.mjs`：真机验证走 `dsh web`（desktop 是 Electron、无调试端口，agent-browser 连不上；dsh web 与 desktop 加载同一套 Web UI、读同一份数据）+ agent-browser，可起停测试实例、抓无障碍树、点按、截图与读 DOM。
 
