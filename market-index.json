@@ -5,8 +5,8 @@
 		"zh": "bluechonk DSH 插件"
 	},
 	"description": {
-		"en": "Plugins for DeepSeek Harness: skills management and usage statistics.",
-		"zh": "DeepSeek Harness 插件：技能管理与使用统计。"
+		"en": "Plugins for DeepSeek Harness: skills management, usage statistics and in-conversation visualizations.",
+		"zh": "DeepSeek Harness 插件：技能管理、使用统计与对话内可视化。"
 	},
 	"plugins": [
 		{
@@ -16,8 +16,8 @@
 				"zh": "技能管理器"
 			},
 			"description": {
-				"en": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认开启，复用宿主 translator 服务）、启停开关、从外部 Agent 技能目录导入（软链或复制）、删除与打开目录。",
-				"zh": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认开启，复用宿主 translator 服务）、启停开关、从外部 Agent 技能目录导入（软链或复制）、删除与打开目录。"
+				"en": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认原文，可切译文，长文本分块并发）、回到顶部与在文件管理器中打开技能目录。",
+				"zh": "DeepSeek Harness 插件 @bluechonk/dsh-skills-manager：侧边栏「技能」独立面板（与「插件」「自动化任务」「使用统计」同级）——展示并管理当前加载的全部 skills（全局 ~/.dsh/skills、~/.agents/skills、项目与工作区技能根），支持作用域切换、搜索、Markdown 详情、描述与正文机器翻译（默认原文，可切译文，长文本分块并发）、回到顶部与在文件管理器中打开技能目录。"
 			},
 			"icon": "https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/dsh-skills-manager/icon.svg",
 			"author": "bluechonk",
@@ -27,12 +27,12 @@
 			},
 			"versions": [
 				{
-					"version": "0.1.1",
-					"publishTimestamp": 1794478201,
+					"version": "0.1.2",
+					"publishTimestamp": 1794557722,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "f223844ef4d00f5677d0e154987817b057519ec4",
+						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
 						"path": "plugins/dsh-skills-manager"
 					}
 				}
@@ -56,13 +56,42 @@
 			},
 			"versions": [
 				{
-					"version": "0.1.0",
-					"publishTimestamp": 1794209593,
+					"version": "0.1.1",
+					"publishTimestamp": 1794557722,
 					"source": {
 						"type": "git",
 						"url": "https://github.com/bluechonk/dsh-plugins.git",
-						"commit": "f223844ef4d00f5677d0e154987817b057519ec4",
+						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
 						"path": "plugins/dsh-usage-stats"
+					}
+				}
+			]
+		},
+		{
+			"name": "@bluechonk/dsh-visualize",
+			"title": {
+				"en": "Visualize",
+				"zh": "对话内可视化"
+			},
+			"description": {
+				"en": "DeepSeek Harness 插件 @bluechonk/dsh-visualize：让模型把 HTML 页面作为对话内可交互可视化渲染出来——模型把页面写成文件、在回复里放一个 visualize 围栏，插件用沙箱 iframe 内联渲染（含 404/过大/越界等失败兜底）。",
+				"zh": "DeepSeek Harness 插件 @bluechonk/dsh-visualize：让模型把 HTML 页面作为对话内可交互可视化渲染出来——模型把页面写成文件、在回复里放一个 visualize 围栏，插件用沙箱 iframe 内联渲染（含 404/过大/越界等失败兜底）。"
+			},
+			"icon": "https://raw.githubusercontent.com/bluechonk/dsh-plugins/main/plugins/dsh-visualize/icon.svg",
+			"author": "bluechonk",
+			"homepage": "https://github.com/bluechonk/dsh-plugins/tree/main/plugins/dsh-visualize",
+			"repository": {
+				"url": "https://github.com/bluechonk/dsh-plugins.git"
+			},
+			"versions": [
+				{
+					"version": "0.1.0",
+					"publishTimestamp": 1794557722,
+					"source": {
+						"type": "git",
+						"url": "https://github.com/bluechonk/dsh-plugins.git",
+						"commit": "429ce2bb721e308cd341f3c91776b0ba66a354cf",
+						"path": "plugins/dsh-visualize"
 					}
 				}
 			]
