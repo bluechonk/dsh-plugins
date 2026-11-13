@@ -9,6 +9,7 @@
     ".": "./lib/index.js",
     "./client": "./client/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
@@ -37,8 +38,7 @@
     "lib/scan.js",
     "client/client.js",
     "cordis.patch.yml",
-    "locale/en.json",
-    "locale/zh.json",
+    "locale/*.json",
     "icon.svg",
     "CHANGELOG.md"
   ],

@@ -10,6 +10,7 @@
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "dsh": {
@@ -36,6 +37,7 @@
     "lib/aggregate.js",
     "lib/client.js",
     "cordis.patch.yml",
+    "locale/*.json",
     "icon.svg"
   ],
   "scripts": {

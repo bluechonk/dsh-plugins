@@ -9,6 +9,7 @@
     ".": "./lib/index.js",
     "./client": "./client/client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
@@ -30,9 +31,8 @@
     "lib/visualize-path.js",
     "client/client.js",
     "cordis.patch.yml",
-    "skills/viz/SKILL.md",
-    "locale/zh.json",
-    "locale/en.json",
+    "skills/visualize/SKILL.md",
+    "locale/*.json",
     "icon.svg",
     "CHANGELOG.md"
   ],
