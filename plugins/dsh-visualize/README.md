@@ -66,12 +66,12 @@ DSH 的回复默认只有 Markdown。想让模型「做个原型看看」「把�
 
 ## 技能
 
-包内带了 `skills/viz/SKILL.md`，教模型什么时候用、怎么写页面、围栏怎么放。DSH 的技能发现只认技能根目录（`~/.dsh/skills`、`~/.agents/skills`、工作区 `.dsh/skills` / `.agents/skills`），所以装完插件要把这个技能放进其中一个根：
+包内带了 `skills/visualize/SKILL.md`，教模型什么时候用、怎么写页面、围栏怎么放。DSH 的技能发现只认技能根目录（`~/.dsh/skills`、`~/.agents/skills`、工作区 `.dsh/skills` / `.agents/skills`），所以装完插件要把这个技能放进其中一个根：
 
 ```bash
-# 任选一个技能根，把 viz 技能放进去
+# 任选一个技能根，把 visualize 技能放进去
 mkdir -p ~/.dsh/skills
-cp -r plugins/dsh-visualize/skills/viz ~/.dsh/skills/viz
+cp -r plugins/dsh-visualize/skills/visualize ~/.dsh/skills/visualize
 ```
 
 ## 安装、更新、卸载

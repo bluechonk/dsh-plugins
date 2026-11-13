@@ -1,7 +1,7 @@
 {
   "name": "@bluechonk/dsh-visualize",
   "version": "0.1.0",
-  "description": "DeepSeek Harness 插件 @bluechonk/dsh-visualize：让模型把 HTML 页面作为对话内可交互可视化渲染出来——模型把页面写成文件、在回复里放一个 viz 围栏，插件用沙箱 iframe 内联渲染（含 404/过大/越界等失败兜底）。",
+  "description": "DeepSeek Harness 插件 @bluechonk/dsh-visualize：让模型把 HTML 页面作为对话内可交互可视化渲染出来——模型把页面写成文件、在回复里放一个 visualize 围栏，插件用沙箱 iframe 内联渲染（含 404/过大/越界等失败兜底）。",
   "icon": "./icon.svg",
   "type": "module",
   "main": "lib/index.js",
