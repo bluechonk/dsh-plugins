@@ -33,10 +33,11 @@ test('projectRootOf 没有 .git 时退回 cwd', () => {
   }
 })
 
-test('projectRootsFor 产出 DSH 的项目根标签与 rank', () => {
+test('projectRootsFor 只产出 .agents/skills（.dsh/skills 不计入技能来源）', () => {
   const roots = projectRootsFor(process.cwd())
-  assert.deepEqual(roots.map((root) => root.label), ['project-dsh', 'project-agents'])
-  assert.deepEqual(roots.map((root) => root.rank), [100, 200])
+  assert.deepEqual(roots.map((root) => root.label), ['project-agents'])
+  assert.deepEqual(roots.map((root) => root.rank), [200])
+  assert.match(roots[0].path, /[\\/]\.agents[\\/]skills$/)
 })
 
 test('globalRootsFor 默认给出用户 DSH 与用户 Agents 根', () => {

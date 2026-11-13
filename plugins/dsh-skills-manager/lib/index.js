@@ -144,9 +144,12 @@ export function apply(ctx, config = {}) {
   const PROJECT_SOURCES = new Set(['project-dsh', 'project-agents'])
   const skillsCache = new Map()
   let globalScanCache = null
+  // 各工作区的扫描结果也按根缓存：面板默认视图会把所有工作区的技能一起列出来。
+  const workspaceScanCache = new Map()
   const invalidateSkillsCache = () => {
     skillsCache.clear()
     globalScanCache = null
+    workspaceScanCache.clear()
   }
 
   // profile 重载后刷新已服务的 client 产物，让界面改动无需重启宿主即可生效。
@@ -369,12 +372,16 @@ export function apply(ctx, config = {}) {
   /** 合并「本地根扫描」与「注册表」，得到当前加载到的技能全景。 */
   const listSkills = async (cwd) => {
     // 短 TTL 缓存：面板每次刷新都全量重扫目录与文件，开销大；写操作后立即失效。
-    const cached = skillsCache.get(cwd)
+    const projectRoots = projectRootsForScope(cwd)
+    // 作用域互斥：选了工作区就只看该工作区；没选（用户 · 本机）看全局 + 用户级 + 预设内置，
+    // 并**额外并入所有已登记工作区的技能根**——面板不再让用户手动切作用域，改成按来源分类展示。
+    const projectScope = projectRoots.length > 0
+    const workspacePaths = projectScope ? [] : listWorkspaces().map((workspace) => workspace.path)
+    // 缓存键带上工作区清单：新增/移除工作区后旧结果不该继续命中。
+    const cacheKey = projectScope ? cwd : (workspacePaths.length > 0 ? 'workspaces:' + workspacePaths.join('|') : '')
+    const cached = skillsCache.get(cacheKey)
     if (cached && Date.now() - cached.at < SKILLS_CACHE_TTL_MS) return cached.value
 
-    const projectRoots = projectRootsForScope(cwd)
-    // 作用域互斥：选了工作区就只看该工作区；没选（用户 · 本机）就看全局 + 用户级 + 预设内置。
-    const projectScope = projectRoots.length > 0
     const byName = new Map()
     let roots
     if (projectScope) {
@@ -389,6 +396,15 @@ export function apply(ctx, config = {}) {
         const globalSkills = discoverLocalSkills(roots)
         globalScanCache = { at: Date.now(), skills: globalSkills }
         for (const local of globalSkills) byName.set(local.name, local)
+      }
+      // 各工作区一并纳入，同名时工作区覆盖全局（与 DSH「工作区技能优先」一致）。
+      for (const path of workspacePaths) {
+        let entry = workspaceScanCache.get(path)
+        if (!entry || Date.now() - entry.at >= GLOBAL_SCAN_TTL_MS) {
+          entry = { at: Date.now(), skills: discoverLocalSkills(projectRootsForScope(path)) }
+          workspaceScanCache.set(path, entry)
+        }
+        for (const local of entry.skills) byName.set(local.name, local)
       }
     }
 
@@ -475,7 +491,7 @@ export function apply(ctx, config = {}) {
     }
     rootMeta.sort((a, b) => a.rank - b.rank)
     const value = { roots: rootMeta, skills: merged, registryError, diagnostics }
-    skillsCache.set(cwd, { at: Date.now(), value })
+    skillsCache.set(cacheKey, { at: Date.now(), value })
     return value
   }
 

@@ -156,17 +156,33 @@ node --test "test/**/*.test.mjs"                                             →
 |---|---|---|
 | 页面根背景 | 深色 `rgb(22,22,22)` / 浅色 `rgb(236,236,238)` | 交给宿主主题，我们只画自己的层级 |
 | 标题 | 30px / 600 / letter-spacing -0.75px / line-height 36px | 同值 |
-| 内容列 | `max-w-4xl`(896px) 居中，横向内距 32px，块间距 32px | `max-width:896px; margin:0 auto; gap:32px` |
-| 工具条 | `justify-between`，块间距 12px，左组（作用域 + 分隔线 + 计数）/ 右（搜索框） | 同结构（新增 `.dsm-toolbarLeft` 分组） |
-| 作用域按钮 | 高 28px、pill 圆角、内距 0 8px、1px 描边、透明底、14px | 同值 |
-| 搜索框 | 高 36px、圆角 12px、宽 256px、左内距 36px、14px | 同值 |
-| 小节标题 | 14px / 400，块下 16px | 同值 |
-| 操作按钮 | 28×28、圆角 8px、描边、底色透明 | 同值 |
+| 内容列 | `max-w-4xl`(896px) 居中，横向内距 32px，块间距 32px | `max-width:896px; margin:0 auto`（块间距 24px） |
+| 搜索框 | 高 36px、圆角 12px、宽 256px、左内距 36px、14px | 同值；移到头部右侧，旁边是刷新按钮 |
 | 翻译分段按钮 | 高 24px、圆角 9999px、两段；选中段 `label-primary` 底 + `bg-base` 字 | 同值 |
-| 技能卡片 | 圆角 12px、无描边、深色 `rgba(255,255,255,.05)` / 浅色 `rgba(13,13,13,.03)` | `color-mix(label-primary 4%)` |
-| 行 | 高 65px、内距 12px 16px、间距 12px、行间细分隔线 | 同值 |
-| 图标块 | 36×36、圆角 12px、图标 60% 透明 | 同值 |
-| 名称 / 描述 | 14px/400/21px 与 12px/18px/60% | 同值 |
+| 来源筛选胶囊 | 容器圆角 10px + 3px 内距；选中段 `bg-layer-1` 底 + 轻阴影、13px/500 | 2026-11-13 改版新增（分类与数量都在这一行） |
+| 技能列表 | **一行一个**：行容器 `flex-direction:column`、间距 8px；行内 内距 12px 16px、圆角 14px、1px 描边 `border-l2`、图标 36px | 2026-11-13 改版新增（替代原行列表，改为整行卡片） |
+| 图标块 | 36×36、圆角 12px、6% 透明的同色底 | 沿用原设计：可写技能四角星、只读技能叠层 |
+| 名称 / 描述 | 名称 14px/500/21px 单行省略；描述 12.5px、两行 clamp | 描述由单行改为两行 |
+
+> 2026-11-13 改版：列表区重做为网格卡片，分类与数量由筛选胶囊承担，去掉作用域下拉、技能计数与总览统计。上表未标「改版新增」的取值仍是与 ZCode 对齐的基线，用于标题、详情弹窗等未改动部分。
+
+### 6.1.1 宿主侧配套改动
+
+`/state` 不带 `cwd` 时原本只扫全局根；改版后客户端不再切作用域，因此宿主在该分支**额外并入所有已登记工作区的技能根**
+（工作区清单来自动态的 `workspaceRegistry.list()`，不写死；每个工作区的扫描结果按路径单独缓存，TTL 与全局一致），
+同名时**工作区那份覆盖全局**——与 DSH 的「工作区技能优先」语义一致。带 `cwd` 的调用行为不变（只看该工作区）。
+
+**分类口径**与根语义一一对齐：
+
+| 分类 | 来源根 | 说明 |
+|---|---|---|
+| 全局 | `<dshHome>/skills`（label `user-dsh`） | 全局 DSH 技能根 |
+| 用户级 | `<agentsHome>/skills`（label `user-agents`） | 全局 Agents 技能根 |
+| 内置 | label `custom` / `bundled` / `runtime` | 预设（app.asar 内的 `dsh-agent-preset/skills`）等自定义目录，以及注册表提供、没有本地文件的技能 |
+| 工作区 | label `project-agents` | **只认 `<workspace>/.agents/skills`** |
+
+`<workspace>/.dsh/skills` **不计入任何分类**：`projectRootsFor()` 只产出 `project-agents`（rank 200），
+避免同一工作区的技能被两个根重复统计。
 
 ### 6.2 两套主题都成立的写法
 
@@ -415,3 +431,16 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 - 新增图标 `IconArrowUp`。
 
 验证：`npm run check` 16 个文件通过，`npm test` 59 项全绿；另跑 `.tmp/verify-back-to-top.mjs` 物化 client 产物、用最小 React 桩渲染 `PanelPage`，断言「初始不出现 → 滚动超阈值出现 → 点击平滑回顶 → 回到顶部后消失」共 5 项，全绿。
+
+## 十八、面板改版：胶囊筛选 + 网格卡片（2026-11-13）
+
+- 列表改为**一行一个技能**（行容器 `column`、间距 8px；图标沿用原设计：可写四角星、只读叠层）。
+- 分类与数量由「全部 / 全局 / 用户级 / 内置 / 工作区」胶囊承担（口径见 6.1.1）；去掉作用域下拉、技能计数与总览统计，默认视图即「全部」。
+- 来源分组：「全部」按分类分组（工作区再按工作区分组），「工作区」按工作区分组，其余单一分类视图平铺。
+- 刷新按钮从原小节标题旁移到头部搜索框右侧，常驻可见；回到顶部沿用上一版实现。
+- 宿主配套改动：`/state` 不带 `cwd` 时并入所有已登记工作区的技能根（工作区清单来自动态的 `workspaceRegistry.list()`，按路径单独缓存，TTL 与全局一致），同名时工作区覆盖全局——客户端因此不再需要手动切作用域。工作区**只认 `.agents/skills`**，`.dsh/skills` 不计入。
+- i18n 清掉 `overview.*` / `section.installed` / `section.builtin` / `toolbar.count` / `scope.user` / `scope.localSuffix` / `scope.group.workspaces`；新增 `filter.global` / `badge.global`（「全局」），并把 `project` 分类改名为 `workspace`。
+- 顺带删掉失去调用方的 `Dropdown` 组件、`IconMonitor` / `IconCheck` / `IconCaret` 三个图标与 `.dsm-menu*` / `.dsm-select*` 等样式。
+
+验证：`npm run check` 通过，`npm test` 64 项全绿（新增「默认作用域同时列出全局与各工作区的技能」「默认视图里同名技能也以工作区那份为准」，把原「切到工作区作用域」用例拆成两条，并补上「工作区 `.dsh/skills` 不计入」的反向断言）。
+真机复验（临时 web 实例）：头部只剩标题 + 搜索 + 刷新；胶囊为 `全部 54 / 全局 0 / 用户级 42 / 内置 8 / 工作区 4`（根清单里已无 `project-dsh`）；点「工作区」得到分组 `modelmux · 4`，切到「全局 / 用户级 / 内置」分别为 0 / 42 / 8 行平铺；搜索、回到顶部、深浅两色主题均正常。
