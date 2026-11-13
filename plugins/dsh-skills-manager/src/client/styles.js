@@ -12,7 +12,7 @@
 export const CSS = [
   // —— 主面板页骨架 ——
   // main 槽位不给页头、内边距与滚动，页面自持（与官方「自动化任务」页一致）。
-  ".dsm-page{display:flex;flex-direction:column;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-base,transparent)}",
+  ".dsm-page{position:relative;display:flex;flex-direction:column;width:100%;height:100%;min-height:0;background:var(--dsw-alias-bg-base,transparent)}",
   ".dsm-pageScroll{flex:1;min-height:0;overflow:auto;scrollbar-gutter:stable}",
   ".dsm-pageContent{max-width:960px;margin:0 auto;padding:28px clamp(24px,4vw,48px) 0}",
   "[data-platform=darwin] .dsm-pageContent{padding-top:calc(28px + var(--dsh-frame-top-clearance,0px))}",
@@ -42,6 +42,9 @@ export const CSS = [
   ".dsm-actions{display:flex;align-items:center;gap:8px}",
   ".dsm-iconBtn{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer}",
   ".dsm-iconBtn:hover{background:var(--dsw-alias-bg-layer-2)}",
+  // 回到顶部：浮动在面板右下角，只在滚过标题与工具条后出现
+  ".dsm-backTop{position:absolute;right:20px;bottom:20px;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.28)}",
+  ".dsm-backTop:hover{background:var(--dsw-alias-bg-layer-2)}",
   ".dsm-primary{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 8px 0 6px;border-radius:8px;border:1px solid transparent;background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-base);font:inherit;font-size:14px;font-weight:400;cursor:pointer}",
   ".dsm-primary:disabled{opacity:.5;cursor:not-allowed}",
   // —— 列表 ——
