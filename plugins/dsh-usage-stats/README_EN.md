@@ -6,7 +6,7 @@ DeepSeek Harness plugin: adds a standalone **Usage Stats** module to the sidebar
 
 A standalone sidebar module, sitting right after **Automated Tasks** and before **More**:
 
-![Usage stats panel](docs/images/01-usage-stats-panel.png)
+![Usage stats panel: summary strip, token activity heatmap, daily trend chart and model usage](docs/images/usage-stats-panel.png)
 
 ## Plugin identity
 
@@ -33,14 +33,6 @@ The loader row id and the client module id are **not** shared: the `id` in `cord
 | Daily token trend | Only the top 6 models by usage in the selected range get a coloured line, drawn with monotone cubic interpolation; the legend is display-only and matches the lines and tooltip rows |
 | Model usage | Donut chart on the left (total tokens in the centre) plus a per-model list on the right (name + share + token count); the list shows no hover text, and the hover card only appears on donut segments |
 | Footer | "Updated at HH:MM" + a refresh button |
-
-The model usage card (donut + model list + the merged "Other models" row):
-
-![Model usage donut](docs/images/02-model-usage-donut.png)
-
-Light theme (same layout, both themes verified):
-
-![Light theme](docs/images/03-light-theme.png)
 
 ## Design baseline
 

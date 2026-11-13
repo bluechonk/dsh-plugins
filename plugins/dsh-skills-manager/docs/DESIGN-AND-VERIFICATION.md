@@ -242,11 +242,6 @@ ctx.slots.register({ name: "main", key: "skills-manager", locale: LOCALE_NS }, P
 | `localeNs` 与组件注册项一致 | 单测锁住 |
 | **运行时切换** | 设置 → 通用设置 → 语言：中文 → English，**不刷新页面**，本面板标题与全部文案立即变英文；再切回中文立即恢复 |
 
-| 截图 | 内容 |
-|---|---|
-| [docs/images/07-english-ui.png](images/07-english-ui.png) | 切到英文后的技能面板（标题 `Skills`、`User · Local`、`Installed 40`、`+ New`） |
-| [docs/images/08-english-detail-dialog.png](images/08-english-detail-dialog.png) | 英文详情弹窗（`Description` / `File content` / `Skill` 徽章） |
-
 ## 九、三处「真能用」的修复（2026-10-21）
 
 ### 9.1 DSH 的加载规则（问题根源）
@@ -300,8 +295,8 @@ ctx.slots.register({ name: "main", key: "skills-manager", locale: LOCALE_NS }, P
 | `npm test` | 67 项全绿 |
 | 安装 | `plugin_manager install_bundle`（本地目录）→ `application: applied`，无警告 |
 | 桌面端实机（desktop profile） | `dsh-client-hmr` 热替换后**未刷新页面**，侧边栏即出现「技能」（使用统计与更多之间）；点击后主面板渲染标题、作用域下拉、「技能 49」、搜索与「已安装 40」列表，开关与删除按钮齐全 |
-| 截图 | [docs/images/01-sidebar-skills-panel.png](images/01-sidebar-skills-panel.png)、[10-skills-main-panel.png](images/10-skills-main-panel.png) |
-| 全套截图重拍 | 在独立验证实例（`web` profile，`dsh --profile web --patch …`，与日常 profile 隔离）上重拍 01–09：主面板、详情弹窗、更多菜单、导入弹窗、作用域下拉、浅色主题、英文界面、英文详情、切回中文，全部为新侧边栏语境（1440×900） |
+| 截图 | [docs/images/skills-panel.png](images/skills-panel.png) |
+| 配图 | 文档只保留两张：[技能面板](images/skills-panel.png)、[技能详情弹窗](images/skill-detail-dialog.png)；2026-11-13 在桌面 profile 实机重拍（宿主热加载新插件后，无需重启应用） |
 
 未复验项：侧边栏收起态（本次未改 `sidebar.panellist` 的通用渲染，收起由宿主负责）。
 浅色主题与英文界面已在重拍中复验：插件配色随主题、文案随语言，均无需刷新页面。
@@ -338,7 +333,6 @@ ctx.slots.register({ name: "main", key: "skills-manager", locale: LOCALE_NS }, P
 | 隔离实例实机 | web profile + 官方 bundle 的 patch 行（translator / cot-translation / 本插件），1440×900 |
 | 翻译效果 | 英文技能的描述与正文均译为中文，`name` 保持英文，Markdown 结构保留 |
 | 对照开关 | 「看原文」切回英文原文，链接变为「看译文」 |
-| 截图 | [docs/images/11-skill-detail-translation.png](images/11-skill-detail-translation.png) |
 
 未复验：`translator-unavailable` 的降级提示（需要在未启用该 bundle 的 profile 里跑，
 本次验证实例显式注入了该 bundle）。
@@ -375,7 +369,6 @@ DSH 把调用策略拆成两个键（`@deepseek-ai/dsh-skill-filesystem` 的 `pa
 |---|---|
 | `npm test` | 70 项全绿（新增：ZCode 来源、两个键一起写/删除、部分更新不误改另一侧、块标量安全） |
 | `dsh web` 实例实机 | 工具条只剩「…（导入）」与刷新；导入弹窗来源列出 ZCode；开关往返后 SKILL.md 与操作前逐字一致 |
-| 截图 | [03-more-menu.png](images/03-more-menu.png)、[04-import-external-agent-skills.png](images/04-import-external-agent-skills.png)、[10-skills-main-panel.png](images/10-skills-main-panel.png) 已按新界面重拍 |
 
 已知边界：DSH 每步重算技能目录，所以停用对**后续**轮次生效；但已经注入到当前会话历史里的
 技能内容不会被撤回，模型仍可能引用它。界面在开关的 `title` 里写明了这一点。
