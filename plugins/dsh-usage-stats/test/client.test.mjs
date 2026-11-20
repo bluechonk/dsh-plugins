@@ -1156,8 +1156,14 @@ test("渲染冒烟：趋势图只画用量前 6 的模型，其余不进图例/�
   assert.equal(items.length, 6, "图例最多 6 个模型");
   assert.deepEqual(
     items.map((n) => texts(n).join("")),
+    ["m8", "m7", "m6", "m5", "m4", "m3"],
+    "图例取用量最高的 6 个（按降序），且名字剥掉第一段提供商前缀",
+  );
+  // 全串仍留在原生 title 里：图上名字干净，鼠标悬停能核对完整键。
+  assert.deepEqual(
+    items.map((n) => n.props.title),
     ["p/m8", "p/m7", "p/m6", "p/m5", "p/m4", "p/m3"],
-    "图例应取用量最高的 6 个，按降序",
+    "图例项的原生 title 应保留完整模型键",
   );
   assert.ok(items.every((n) => n.type === "span"), "图例项必须是 span（不可点击）");
   const paths = collect(tree).filter((n) => n.type === "path");

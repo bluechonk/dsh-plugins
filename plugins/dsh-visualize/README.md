@@ -66,13 +66,9 @@ DSH 的回复默认只有 Markdown。想让模型「做个原型看看」「把�
 
 ## 技能
 
-包内带了 `skills/visualize/SKILL.md`，教模型什么时候用、怎么写页面、围栏怎么放。DSH 的技能发现只认技能根目录（`~/.dsh/skills`、`~/.agents/skills`、工作区 `.dsh/skills` / `.agents/skills`），所以装完插件要把这个技能放进其中一个根：
+包内带了 `skills/visualize/SKILL.md`，教模型什么时候用、怎么写页面、围栏怎么放。插件在 `apply` 时通过宿主的 `ctx.skills.registerProvider` 把它挂成**随包内置技能**（官方 office 技能就是这个机制）：挂上之后技能面板的「内置分组」里能看到它、模型也能按名字调用，效果与把文件拷进某个技能根一致，但插件不必去写用户目录。
 
-```bash
-# 任选一个技能根，把 visualize 技能放进去
-mkdir -p ~/.dsh/skills
-cp -r plugins/dsh-visualize/skills/visualize ~/.dsh/skills/visualize
-```
+> 宿主对包内技能的要求来自 `@deepseek-ai/dsh-skill`：需要合法的 kebab-case `name` 与非空 `description`，正文作为技能内容注入。缺任一条件时插件会静默跳过注册（不影响可视化本身）。
 
 ## 安装、更新、卸载
 
@@ -88,7 +84,7 @@ plugin_manager remove_bundle --target "@bluechonk/dsh-visualize"
 ```bash
 npm install           # 在仓库根目录，装 esbuild（仅构建需要）
 npm run build         # 在仓库根目录，把所有 src/client/ 打包成各自的 client/client.js
-npm test              # node:test 单测（27 项：围栏解析 / 路径白名单 / 文件路由 / client 装配与渲染）
+npm test              # node:test 单测（32 项：围栏解析 / 路径白名单 / 文件路由 / 随包技能注册 / client 装配与渲染）
 npm run check         # 语法检查（lib / client / src）
 ```
 

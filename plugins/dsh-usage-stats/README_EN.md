@@ -30,7 +30,7 @@ The loader row id and the client module id are **not** shared: the `id` in `cord
 | Six-cell summary strip | Total Tokens / Peak Tokens / Cache Hit Rate / Longest Chat / Current Streak / Longest Streak; when the width is too narrow the **whole cell wraps** instead of truncating the label |
 | Token activity | Heatmap cells covering January to December of the current year (52–54 calendar weeks, starting Sunday); pills in the top-right switch between Daily / Weekly / Total. Days that have not arrived yet are drawn as dashed outlines |
 | Time range | Pills switch between Last 7 Days / Last 30 Days, affecting **only the trend chart below** |
-| Daily token trend | Only the top 6 models by usage in the selected range get a coloured line, drawn with monotone cubic interpolation; the legend is display-only and matches the lines and tooltip rows |
+| Daily token trend | Only the top 6 models by usage in the selected range get a coloured line, drawn with monotone cubic interpolation; the legend is display-only and matches the lines and tooltip rows; **model names in the legend and tooltip strip the first provider segment** (the full key stays in the native `title`) |
 | Model usage | Donut chart on the left (total tokens in the centre) plus a per-model list on the right (name + share + token count); the list shows no hover text, and the hover card only appears on donut segments |
 | Footer | "Updated at HH:MM" + a refresh button |
 

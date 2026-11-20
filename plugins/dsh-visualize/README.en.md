@@ -47,19 +47,16 @@ Multiple fences in one reply render in order.
 
 ## Skill
 
-The package ships `skills/visualize/SKILL.md`. DSH discovers skills from skill roots only, so copy it into one:
+The package ships `skills/visualize/SKILL.md`, which teaches the model when to use it, how to write the page and where to put the fence. On `apply` the plugin registers it with the host through `ctx.skills.registerProvider` as a **bundled skill** (the same mechanism the official Office skills use): once registered it shows up in the built-in group of the skills panel and the model can invoke it by name — the effect matches copying the file into a skill root, without the plugin writing into user directories.
 
-```bash
-mkdir -p ~/.dsh/skills
-cp -r plugins/dsh-visualize/skills/visualize ~/.dsh/skills/visualize
-```
+> The host contract comes from `@deepseek-ai/dsh-skill`: a valid kebab-case `name` and a non-empty `description` are required, and the body is injected as the skill content. If either is missing the plugin silently skips registration (visualization itself keeps working).
 
 ## Development
 
 ```bash
 npm install           # at the repository root, installs esbuild (build only)
 npm run build         # bundles every src/client/ into its client/client.js
-npm test              # node:test (27 cases: fence parsing / path allowlist / file route / client wiring)
+npm test              # node:test (32 cases: fence parsing / path allowlist / file route / bundled skill registration / client wiring)
 npm run check         # syntax check (lib / client / src)
 ```
 

@@ -28,6 +28,7 @@
   },
   "files": [
     "lib/index.js",
+    "lib/skill.js",
     "lib/visualize-path.js",
     "client/client.js",
     "cordis.patch.yml",

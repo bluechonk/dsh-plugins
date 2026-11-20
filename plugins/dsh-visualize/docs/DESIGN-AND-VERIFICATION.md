@@ -63,13 +63,34 @@ VizAssistantView（priority -1 遮蔽 assistant-step）
 
 iframe 用 `sandbox="allow-scripts"`（不给 `allow-same-origin`）：文档是独立源，读不到宿主、发不出同源请求；配合 CSP 禁掉 `connect-src`，页面里的 `fetch` / XHR 也出不去。
 
+### 3.5 随包技能
+
+`skills/visualize/SKILL.md` 不靠用户手动拷进技能根，而是插件在 `apply` 时通过宿主的
+`ctx.skills.registerProvider` 挂成**内置技能**——与官方 `@deepseek-ai/dsh-skill-office`
+同一机制（它也是把包内 `assets/<name>/SKILL.md` 注册成 provider）。挂上之后：
+
+- 技能面板的「内置分组」能看到它，模型按名字就能调用；
+- 插件不必写用户目录（`~/.dsh/skills` 等），升级与卸载都由 profile 的插件清单决定。
+
+provider 契约来自 `@deepseek-ai/dsh-skill`：`list()` 返回候选（`name` / `description` /
+`invocation` / `source` / `rank` / `provider`，可选 `resourceBase` 与不透明 `locator`），
+`get()` 回传完整定义（多一个 `content`，即去掉 frontmatter 的正文）。
+
+实现要点：
+
+- `BUNDLED_SKILL_RANK`（600）按值写死：插件装进来后通常解析不到宿主内置的
+  `@deepseek-ai/dsh-skill` 包，硬导入会在加载期抛错。
+- frontmatter 只做最小解析（顶层标量键 + 引号还原）；正文原样返回，不做任何加工。
+- 缺文件 / 缺 `name` / 缺 `description` / 宿主没有 skills 服务时静默跳过——少一个技能不该让
+  可视化功能整体不可用。
+
 ## 四、验证
 
 ### 4.1 静态与单元测试
 
 ```
-npm run check    → 9 个文件语法检查通过
-npm test         → 27 项全绿
+npm run check    → 10 个文件语法检查通过
+npm test         → 32 项全绿
 ```
 
 覆盖：
@@ -79,6 +100,7 @@ npm test         → 27 项全绿
 | `pure.test.mjs` | 围栏切分（顺序、多围栏、大小写、未闭合）、`parseVisualizeSpec`（缺 path / 坏 JSON / 非对象 / height 取值）、`stripVisualizeFences`、`collectVisualizeSpecs`（只读 text 块、坏围栏跳过）、`withVisualizeFencesStripped`（无围栏不克隆、有围栏只改文本块且不动原节点）、`visualizeUrlOf` 编码 |
 | `visualize-path.test.mjs` | 白名单根的构成、根内/等于根/父目录穿越/根外、相对路径、不存在、目录、超 1MB、符号链接绕行（指向根外拒绝、指向根内放行并返回真实路径） |
 | `http.test.mjs` | 200 + `text/html` + CSP + nosniff；越界 / 不存在 / 相对路径 404；HEAD 无响应体；非 GET/HEAD 405 带 `Allow`；跨站来源、坏 origin、非常规来源地址 403 |
+| `skill.test.mjs` | 从真实 SKILL.md 取 name / description 与正文；缺文件、缺 frontmatter、缺 name / description 返回 null；注册后 provider 的 list/get 形状符合宿主契约；没有 skills 服务时静默跳过 |
 | `client.test.mjs` | `__pure` 导出面快照；遮蔽条目的 name / key / priority / 两个子槽；有围栏时官方组件拿到剥掉围栏的克隆节点且追加卡片（标题取 `spec.title`、`title` 属性带完整路径、加载占位）；无围栏时原样转发原节点且没有卡片 |
 
 ### 4.2 真机复验（2026-11-13）
@@ -90,6 +112,7 @@ npm test         → 27 项全绿
 | 插件激活 | host 半挂上 `/dsh-visualize/file`（日志 `route registered`）；client 半 factory/apply 均执行，`style[data-plugin-css="@bluechonk/dsh-visualize"]` 已注入 |
 | 普通回复 | 遮蔽组件 `specs=0`，原样转交官方组件渲染，界面与原生一致 |
 | 含 viz 围栏的回复 | 模型写 `<workspace>/.dsh/visualizations/demo.html` 并在回复里放 ```` ```visualize ```` 围栏；组件 `specs=1`，回复里出现沙箱 iframe（`/dsh-visualize/file?path=...`），页面正文显示 `Hello Viz` |
+| 随包技能自动注册 | 不往任何技能根拷文件，插件在 `apply` 时用静态 `inject = ['skills', ...]` + `ctx.skills.registerProvider` 挂上包内 SKILL.md。真机核对：技能面板「内置」由 4 项变 5 项，新增 `visualize`；`POST /dsh-skills-manager/body {"name":"visualize"}` 返回 `200 / source=bundled`，正文即 SKILL.md 去掉 frontmatter 的内容 |
 
 复验中修掉的两个真实问题：
 
