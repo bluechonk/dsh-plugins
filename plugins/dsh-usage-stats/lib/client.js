@@ -33,7 +33,7 @@
 //   ⑤ 趋势折线最多画用量最高的 6 个模型（图例/折线/悬停行共用同一份清单），
 //      不做「其他模型」归并（归并是环形图的明文要求）；被截掉的模型数在悬停卡片里按
 //      「悬停日当天」注明（区间级会天天显示同一个数）。
-//   ⑥ 悬停卡片定宽 230（TIP_W）——定位数学可精确钳位，不做「渲染后量尺寸」的二段定位；
+//   ⑥ 悬停卡片定宽 280（TIP_W）——定位数学可精确钳位，不做「渲染后量尺寸」的二段定位；
 //      热力图/环形图/趋势图共用同一张卡片（§6）。
 //
 // 样式全部 dus-* 前缀，零官方类名依赖；<style> 注入走 data-plugin-css 去重
@@ -399,11 +399,11 @@ window.__ModuleLoader__.load({
       // 悬停卡片（ZCode 同款：标题当日总量 + 分模型行）。v0.2.0 起热力图/环形图共用同一张卡片：
       // 定宽 = TIP_W 的**边框盒**（box-sizing:border-box，否则 padding/border 会让实际宽多 22px、
       // 钳位数学失真）；max-width 收进窄容器。不做「先渲染再量尺寸」的回流补救。
-      ".dus-tip{position:absolute;box-sizing:border-box;width:230px;max-width:calc(100% - 16px);pointer-events:none;z-index:5;background:var(--dus-ttbg);border:1px solid var(--dus-border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.22);padding:8px 10px;font-size:12px}",
+      ".dus-tip{position:absolute;box-sizing:border-box;width:280px;max-width:calc(100% - 16px);pointer-events:none;z-index:5;background:var(--dus-ttbg);border:1px solid var(--dus-border);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.22);padding:8px 10px;font-size:12px}",
       ".dus-tipH{font-weight:600;margin-bottom:5px}",
       ".dus-tipL{color:var(--dus-fgsubtle);font-variant-numeric:tabular-nums}",
       ".dus-tipR{display:flex;align-items:center;gap:8px;padding:2px 0;color:var(--dus-fgsubtle)}",
-      ".dus-tipN{flex:1;min-width:0;padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+      ".dus-tipN{flex:1;min-width:0;padding-right:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
       ".dus-tipV{font-family:ui-monospace,\"SF Mono\",\"Cascadia Mono\",Consolas,monospace;font-weight:500;color:var(--dus-fg);font-variant-numeric:tabular-nums}",
       ".dus-tipU{color:var(--dus-fgsubtle);margin-left:4px}",
       ".dus-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}",
@@ -903,7 +903,7 @@ window.__ModuleLoader__.load({
 
     //#region v0.2.0 新增纯函数（SPEC §6；只放算术与转移表，副作用一律留在组件里）
     /** 悬停卡片尺寸（SPEC §6）：定宽让定位数学可精确钳位；TIP_H 只用于纵向钳位的保守估计。 */
-    const TIP_W = 230;
+    const TIP_W = 280;
     const TIP_H = 120;
     /** 卡片高度的保守估算（标题 + 每行 17px + 内衬），只给纵向钳位用；行数可变的趋势卡片用它。 */
     const tipHeightOf = (rowCount) => 40 + 17 * Math.max(1, Math.floor(Number(rowCount) || 0));
