@@ -763,9 +763,11 @@ window.__ModuleLoader__.load({
       return d;
     }
 
-    /** 色板取色：6 色循环（--dus-c1..--dus-c6）。 */
+    /** 色板取色：6 色循环（--dus-c1..--dus-c6）；变量缺失时回退同系 hex，避免整块无色。 */
+    const PALETTE_FALLBACK = ["#4c9ffe", "#4fd1c5", "#a78bfa", "#fb7185", "#818cf8", "#22d3ee"];
     function paletteVar(i) {
-      return "var(--dus-c" + (((i % 6) + 6) % 6 + 1) + ")";
+      const idx = ((i % 6) + 6) % 6;
+      return "var(--dus-c" + (idx + 1) + ", " + PALETTE_FALLBACK[idx] + ")";
     }
 
     /** 单模型值读取（byModel 缺键/坏值按 0；负值按 0 处理）。
@@ -1001,8 +1003,8 @@ window.__ModuleLoader__.load({
       list.sort((a, b) => b.v - a.v || (a.key < b.key ? -1 : 1));
       const cap = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : list.length;
       return {
-        // color 留空：这几行不是图上的线，点用空心圈画（filled=线、hollow=不在图上）
-        rows: list.slice(0, cap).map((it) => ({ key: it.key, color: "", off: true, value: fmtCompact(it.v, true, t) })),
+        // 空心圈=不在图上，但边框仍取色板色：全透明会像「被挖空」，看不出是有效模型
+        rows: list.slice(0, cap).map((it, i) => ({ key: it.key, color: paletteVar(shown.size + i), off: true, value: fmtCompact(it.v, true, t) })),
         restCount: Math.max(0, list.length - cap),
       };
     }
@@ -1129,7 +1131,7 @@ window.__ModuleLoader__.load({
       return el("div", { className: "dus-tip", style: { left: props.left + "px", top: props.top + "px" } },
         props.title === null || props.title === undefined ? null : el("div", { className: "dus-tipH" }, props.title),
         rows.map((r) => el("div", { key: r.key, className: r.off === true ? "dus-tipR dus-tipROff" : "dus-tipR" },
-          el("i", { className: "dus-dot", style: r.color === "" ? undefined : { background: r.color } }),
+          el("i", { className: "dus-dot", style: r.color === "" ? undefined : (r.off === true ? { borderColor: r.color } : { background: r.color }) }),
           el("span", { className: "dus-tipN", title: r.key }, modelLabelOf(r.key)),
           el("span", { className: "dus-tipV" }, r.value),
           el("span", { className: "dus-tipU" }, "tokens"),

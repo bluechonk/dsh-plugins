@@ -8,6 +8,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 
+/** 与 client 的 PALETTE_FALLBACK 对应：断言只表达「取到第几色 + 带 fallback」，不复制整串。 */
+const SW = (i) => "var(--dus-c" + i + ", " + ["#4c9ffe", "#4fd1c5", "#a78bfa", "#fb7185", "#818cf8", "#22d3ee"][i - 1] + ")";
+
 // —— 最小 React 桩：只按 client.js 实际摸到的面给（Component/五个 hook/createElement）——
 class StubComponent {}
 const reactStub = {
@@ -349,7 +352,7 @@ test("donutRowsOf：8 模型归并 6 行+「其他模型」，行额与 total �
   assert.equal(out.rows[6].color, "var(--dus-fgfaint)");
   assert.equal(out.rows[6].tokens, 3000); // m0+m1 被 slice(6) 截进「其他」
   assert.deepEqual(out.rows.slice(0, 6).map((r) => r.key), ["m7", "m6", "m5", "m4", "m3", "m2"]); // 按额降序
-  assert.deepEqual(out.rows.slice(0, 6).map((r) => r.color), ["var(--dus-c1)", "var(--dus-c2)", "var(--dus-c3)", "var(--dus-c4)", "var(--dus-c5)", "var(--dus-c6)"]);
+  assert.deepEqual(out.rows.slice(0, 6).map((r) => r.color), [SW(1), SW(2), SW(3), SW(4), SW(5), SW(6)]);
   assert.equal(out.total, 36000);
   assert.equal(out.rows.reduce((a, r) => a + r.tokens, 0), out.total);
 });
@@ -502,11 +505,11 @@ test("fmtDayCn / fmtFullDayCn：中文月日拼接（月日不带前导零）", 
 
 //#region 模型行（paletteVar / modelValueOf / trendModelRowsOf）
 test("paletteVar：6 色循环取用，负索引同余回绕", { timeout: 5000 }, () => {
-  assert.equal(P.paletteVar(0), "var(--dus-c1)");
-  assert.equal(P.paletteVar(5), "var(--dus-c6)");
-  assert.equal(P.paletteVar(6), "var(--dus-c1)");
-  assert.equal(P.paletteVar(-1), "var(--dus-c6)");
-  assert.equal(P.paletteVar(13), "var(--dus-c2)");
+  assert.equal(P.paletteVar(0), SW(1));
+  assert.equal(P.paletteVar(5), SW(6));
+  assert.equal(P.paletteVar(6), SW(1));
+  assert.equal(P.paletteVar(-1), SW(6));
+  assert.equal(P.paletteVar(13), SW(2));
 });
 
 test("modelValueOf：正常读取；缺键/坏值/缺 byModel/null 点全兜 0；负值按 0 处理", { timeout: 5000 }, () => {
@@ -523,8 +526,8 @@ test("modelValueOf：正常读取；缺键/坏值/缺 byModel/null 点全兜 0�
 
 test("trendModelRowsOf：跨点并集、按总量降序、零/负总量滤除；空与坏输入=空表", { timeout: 5000 }, () => {
   assert.deepEqual(P.trendModelRowsOf([{ byModel: { "m/a": 10, "m/b": 30 } }, { byModel: { "m/a": 5, "m/c": 0 } }, null, { bad: 1 }]), [
-    { key: "m/b", color: "var(--dus-c1)" },
-    { key: "m/a", color: "var(--dus-c2)" },
+    { key: "m/b", color: SW(1) },
+    { key: "m/a", color: SW(2) },
   ]);
   assert.deepEqual(P.trendModelRowsOf([]), []);
   assert.deepEqual(P.trendModelRowsOf(null), []);
@@ -697,7 +700,7 @@ test("hiddenModelRowsOf：按悬停日列出未画线的有量模型明细（不
   const out = P.hiddenModelRowsOf(day, shown, 3);
   assert.deepEqual(out.rows.map((r) => r.key), ["p/e", "p/h"], "按当天用量降序列出未画线的模型");
   assert.deepEqual(out.rows.map((r) => r.value), ["7万", "1000"]);
-  assert.ok(out.rows.every((r) => r.off === true && r.color === ""), "未画线的行必须是空心标记");
+  assert.ok(out.rows.every((r) => r.off === true && r.color !== ""), "未画线的行必须是空心标记且边框带色");
   assert.equal(out.restCount, 0);
   // 上限之外折成计数：只画前 6 条时，p/c、p/e、p/h 都未画线，列前 2 条、其余计入 restCount
   const capped = P.hiddenModelRowsOf(day, [{ key: "p/a" }], 2);
